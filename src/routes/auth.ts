@@ -8,6 +8,28 @@ import { register, login, logout, getUserInfo, checkEmailAvailability, refreshAc
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 import { createLoginRateLimiter, createRegisterRateLimiter } from '../middleware/rateLimiter';
+import { getConfig } from '../config/environment';
+import {
+  generateGoogleOAuthState,
+  validateGoogleOAuthState,
+  getGoogleAccessToken,
+  getGoogleUserInfo,
+  googleLogin
+} from '../services/GoogleOAuthService';
+import {
+  generateKakaoOAuthState,
+  validateKakaoOAuthState,
+  getKakaoAccessToken,
+  getKakaoUserInfo,
+  kakaoLogin
+} from '../services/KakaoOAuthService';
+import {
+  generateNaverOAuthState,
+  validateNaverOAuthState,
+  getNaverAccessToken,
+  getNaverUserInfo,
+  naverLogin
+} from '../services/NaverOAuthService';
 
 const router = Router();
 
@@ -160,6 +182,204 @@ router.post('/logout', requireAuth, asyncHandler(async (req: Request, res: Respo
   res.status(200).json({
     success: true,
     message: '로그아웃되었습니다',
+    timestamp: new Date().toISOString()
+  });
+}));
+
+// ===== OAuth 2.0 Routes (Phase 2) =====
+
+/**
+ * GET /api/v1/auth/google
+ * Google OAuth 인증 페이지로 리다이렉트 (TASK-2-1)
+ * 응답: 302 Redirect to https://accounts.google.com/o/oauth2/v2/auth
+ */
+router.get('/google', asyncHandler(async (req: Request, res: Response) => {
+  const config = getConfig();
+
+  // Generate state and store in Redis
+  const state = await generateGoogleOAuthState();
+
+  // Construct Google OAuth URL
+  const googleOAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  googleOAuthUrl.searchParams.set('client_id', config.oauth.google.clientId);
+  googleOAuthUrl.searchParams.set('redirect_uri', config.oauth.google.redirectUri);
+  googleOAuthUrl.searchParams.set('response_type', 'code');
+  googleOAuthUrl.searchParams.set('scope', 'openid profile email');
+  googleOAuthUrl.searchParams.set('state', state);
+
+  res.redirect(googleOAuthUrl.toString());
+}));
+
+/**
+ * GET /api/v1/auth/google/callback
+ * Google OAuth 콜백 핸들러 (TASK-2-3)
+ * 쿼리: ?code=...&state=...
+ * 응답: { user: {...}, tokens: { access_token, refresh_token, token_type, expires_in } }
+ */
+router.get('/google/callback', asyncHandler(async (req: Request, res: Response) => {
+  const { code, state } = req.query;
+
+  if (!code || typeof code !== 'string') {
+    throw new Error('OAuth authorization code is required');
+  }
+
+  if (!state || typeof state !== 'string') {
+    throw new Error('OAuth state parameter is required');
+  }
+
+  // Validate state
+  const isValidState = await validateGoogleOAuthState(state);
+  if (!isValidState) {
+    throw new Error('Invalid or expired OAuth state');
+  }
+
+  // Exchange code for access token
+  const tokenResponse = await getGoogleAccessToken(code);
+
+  // Get user info from Google
+  const googleUserInfo = await getGoogleUserInfo(tokenResponse.access_token);
+
+  // Get client IP
+  const forwarded = req.get('x-forwarded-for');
+  const ipAddress = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+  const userAgent = req.get('user-agent') || 'unknown';
+
+  // Login or create user
+  const result = await googleLogin(tokenResponse.access_token, googleUserInfo, ipAddress, userAgent);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * GET /api/v1/auth/kakao
+ * Kakao OAuth 인증 페이지로 리다이렉트 (TASK-2-5)
+ * 응답: 302 Redirect to https://kauth.kakao.com/oauth/authorize
+ */
+router.get('/kakao', asyncHandler(async (req: Request, res: Response) => {
+  const config = getConfig();
+
+  // Generate state and store in Redis
+  const state = await generateKakaoOAuthState();
+
+  // Construct Kakao OAuth URL
+  const kakaoOAuthUrl = new URL('https://kauth.kakao.com/oauth/authorize');
+  kakaoOAuthUrl.searchParams.set('client_id', config.oauth.kakao.clientId);
+  kakaoOAuthUrl.searchParams.set('redirect_uri', config.oauth.kakao.redirectUri);
+  kakaoOAuthUrl.searchParams.set('response_type', 'code');
+  kakaoOAuthUrl.searchParams.set('state', state);
+
+  res.redirect(kakaoOAuthUrl.toString());
+}));
+
+/**
+ * GET /api/v1/auth/kakao/callback
+ * Kakao OAuth 콜백 핸들러 (TASK-2-7)
+ * 쿼리: ?code=...&state=...
+ * 응답: { user: {...}, tokens: { access_token, refresh_token, token_type, expires_in } }
+ */
+router.get('/kakao/callback', asyncHandler(async (req: Request, res: Response) => {
+  const { code, state } = req.query;
+
+  if (!code || typeof code !== 'string') {
+    throw new Error('OAuth authorization code is required');
+  }
+
+  if (!state || typeof state !== 'string') {
+    throw new Error('OAuth state parameter is required');
+  }
+
+  // Validate state
+  const isValidState = await validateKakaoOAuthState(state);
+  if (!isValidState) {
+    throw new Error('Invalid or expired OAuth state');
+  }
+
+  // Exchange code for access token
+  const tokenResponse = await getKakaoAccessToken(code);
+
+  // Get user info from Kakao
+  const kakaoUserInfo = await getKakaoUserInfo(tokenResponse.access_token);
+
+  // Get client IP
+  const forwarded = req.get('x-forwarded-for');
+  const ipAddress = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+  const userAgent = req.get('user-agent') || 'unknown';
+
+  // Login or create user
+  const result = await kakaoLogin(tokenResponse.access_token, kakaoUserInfo, ipAddress, userAgent);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * GET /api/v1/auth/naver
+ * Naver OAuth 인증 페이지로 리다이렉트 (TASK-2-9)
+ * 응답: 302 Redirect to https://nid.naver.com/oauth2.0/authorize
+ */
+router.get('/naver', asyncHandler(async (req: Request, res: Response) => {
+  const config = getConfig();
+
+  // Generate state and store in Redis
+  const state = await generateNaverOAuthState();
+
+  // Construct Naver OAuth URL
+  const naverOAuthUrl = new URL('https://nid.naver.com/oauth2.0/authorize');
+  naverOAuthUrl.searchParams.set('client_id', config.oauth.naver.clientId);
+  naverOAuthUrl.searchParams.set('redirect_uri', config.oauth.naver.redirectUri);
+  naverOAuthUrl.searchParams.set('response_type', 'code');
+  naverOAuthUrl.searchParams.set('state', state);
+
+  res.redirect(naverOAuthUrl.toString());
+}));
+
+/**
+ * GET /api/v1/auth/naver/callback
+ * Naver OAuth 콜백 핸들러 (TASK-2-11)
+ * 쿼리: ?code=...&state=...
+ * 응답: { user: {...}, tokens: { access_token, refresh_token, token_type, expires_in } }
+ */
+router.get('/naver/callback', asyncHandler(async (req: Request, res: Response) => {
+  const { code, state } = req.query;
+
+  if (!code || typeof code !== 'string') {
+    throw new Error('OAuth authorization code is required');
+  }
+
+  if (!state || typeof state !== 'string') {
+    throw new Error('OAuth state parameter is required');
+  }
+
+  // Validate state
+  const isValidState = await validateNaverOAuthState(state);
+  if (!isValidState) {
+    throw new Error('Invalid or expired OAuth state');
+  }
+
+  // Exchange code for access token
+  const tokenResponse = await getNaverAccessToken(code, state);
+
+  // Get user info from Naver
+  const naverUserInfo = await getNaverUserInfo(tokenResponse.access_token);
+
+  // Get client IP
+  const forwarded = req.get('x-forwarded-for');
+  const ipAddress = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+  const userAgent = req.get('user-agent') || 'unknown';
+
+  // Login or create user
+  const result = await naverLogin(tokenResponse.access_token, naverUserInfo, ipAddress, userAgent);
+
+  res.status(200).json({
+    success: true,
+    data: result,
     timestamp: new Date().toISOString()
   });
 }));
