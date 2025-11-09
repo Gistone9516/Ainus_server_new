@@ -8,6 +8,7 @@ import { getConfig } from './config/environment';
 import { errorHandler, asyncHandler } from './middleware/errorHandler';
 import { Logger } from './database/logger';
 import { v4 as uuidv4 } from 'uuid';
+import authRouter from './routes/auth';
 
 const logger = new Logger('App');
 
@@ -55,8 +56,8 @@ export function createApp(): Express {
     });
   }));
 
-  // 라우트 마운트 (향후 추가)
-  // app.use('/api/v1/auth', authRouter);
+  // 라우트 마운트
+  app.use('/api/v1/auth', authRouter);
   // app.use('/api/v1/models', modelsRouter);
   // app.use('/api/v1/community', communityRouter);
   // ...
