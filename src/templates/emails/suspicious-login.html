@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      color: #ffffff;
+      padding: 40px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .alert-badge {
+      display: inline-block;
+      background-color: rgba(255, 255, 255, 0.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      margin-top: 10px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .alert-icon {
+      font-size: 48px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .alert-title {
+      font-size: 20px;
+      color: #dc3545;
+      font-weight: 700;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .alert-message {
+      font-size: 16px;
+      color: #333333;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .details-box {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #856404;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-label {
+      font-weight: 600;
+    }
+    .action-buttons {
+      margin: 30px 0;
+      text-align: center;
+    }
+    .button {
+      display: inline-block;
+      padding: 12px 30px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      margin: 0 10px;
+      cursor: pointer;
+      transition: opacity 0.3s ease;
+    }
+    .button-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #ffffff !important;
+    }
+    .button-secondary {
+      background-color: #e9ecef;
+      color: #495057 !important;
+    }
+    .button-primary:hover {
+      opacity: 0.9;
+    }
+    .button-secondary:hover {
+      opacity: 0.8;
+    }
+    .info-box {
+      background-color: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+      font-size: 14px;
+      color: #1565c0;
+    }
+    .footer {
+      background-color: #f8f9fa;
+      padding: 20px 30px;
+      border-top: 1px solid #dee2e6;
+      font-size: 12px;
+      color: #666666;
+      text-align: center;
+    }
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚠️ <%= appName %></h1>
+      <p style="margin: 0; font-size: 14px; opacity: 0.9;">보안 알림</p>
+      <div class="alert-badge">의심스러운 로그인 시도</div>
+    </div>
+
+    <div class="content">
+      <div class="alert-icon">🔒</div>
+
+      <div class="alert-title">
+        의심스러운 로그인이 감지되었습니다
+      </div>
+
+      <div class="alert-message">
+        <p>
+          <%= appName %> 계정에 일반적이지 않은 위치에서의 로그인 시도가 감지되었습니다.
+          이것이 본인인 경우 안내를 무시하셔도 됩니다.
+          그렇지 않으면 즉시 조치를 취해주세요.
+        </p>
+      </div>
+
+      <div class="details-box">
+        <div class="detail-row">
+          <span class="detail-label">📍 위치:</span>
+          <span><%= location %></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">🌐 IP 주소:</span>
+          <span><%= ipAddress %></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">💻 디바이스:</span>
+          <span><%= device %></span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">⏰ 시간:</span>
+          <span><%= timestamp %></span>
+        </div>
+      </div>
+
+      <div class="info-box">
+        ℹ️ <strong>이 로그인이 본인인가요?</strong>
+        <p style="margin: 10px 0 0 0;">
+          예인 경우, 이 이메일은 무시하셔도 됩니다.
+          아니오인 경우, 즉시 비밀번호를 변경하고 보안 설정을 확인하세요.
+        </p>
+      </div>
+
+      <div class="action-buttons">
+        <a href="https://ainus.example.com/auth/change-password" class="button button-primary">
+          비밀번호 변경
+        </a>
+        <a href="https://ainus.example.com/auth/security" class="button button-secondary">
+          보안 설정 확인
+        </a>
+      </div>
+
+      <p style="font-size: 14px; color: #666666;">
+        <strong>권장사항:</strong>
+      </p>
+      <ul style="font-size: 14px; color: #666666; padding-left: 20px;">
+        <li>비밀번호를 강력한 새로운 비밀번호로 변경하세요</li>
+        <li>다중 인증(MFA)을 활성화하세요</li>
+        <li>로그인 활동을 모니터링하세요</li>
+        <li>신뢰할 수 없는 기기에서는 자동 로그인을 비활성화하세요</li>
+      </ul>
+
+      <p style="font-size: 14px; color: #666666; margin-top: 30px;">
+        <strong>도움이 필요하신가요?</strong><br>
+        <a href="mailto:<%= supportEmail %>"><%= supportEmail %></a>로 연락주세요.
+      </p>
+    </div>
+
+    <div class="footer">
+      <p style="margin: 0;">
+        이 이메일은 자동 생성되었습니다. 회신하지 마세요.
+      </p>
+      <p style="margin: 10px 0 0 0;">
+        <a href="https://ainus.example.com">Ainus 홈페이지</a> |
+        <a href="https://ainus.example.com/privacy">개인정보 정책</a> |
+        <a href="https://ainus.example.com/terms">이용약관</a>
+      </p>
+      <p style="margin: 10px 0 0 0; opacity: 0.7;">
+        © <%= new Date().getFullYear() %> <%= appName %>. All rights reserved.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

@@ -64,6 +64,17 @@ export interface AppConfig {
     };
   };
 
+  // Email Configuration (Phase 3)
+  email: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    password: string;
+    from: string;
+    name: string;
+  };
+
   // External APIs
   externalApis: {
     artificialAnalysisApiKey: string;
@@ -151,6 +162,16 @@ export function loadConfig(): AppConfig {
         clientSecret: process.env.NAVER_CLIENT_SECRET || '',
         redirectUri: process.env.NAVER_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/naver/callback'
       }
+    },
+
+    email: {
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587', 10),
+      secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+      user: process.env.EMAIL_USER || 'your-email@gmail.com',
+      password: process.env.EMAIL_PASSWORD || 'your-password',
+      from: process.env.EMAIL_FROM || 'noreply@ainus.example.com',
+      name: process.env.EMAIL_FROM_NAME || 'Ainus'
     },
 
     externalApis: {

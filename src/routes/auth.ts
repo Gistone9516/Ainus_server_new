@@ -4,10 +4,21 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { register, login, logout, getUserInfo, checkEmailAvailability, refreshAccessToken } from '../services/AuthService';
+import {
+  register,
+  login,
+  logout,
+  getUserInfo,
+  checkEmailAvailability,
+  refreshAccessToken,
+  forgotPassword,
+  resetPassword,
+  changePassword,
+  verifyEmail
+} from '../services/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
-import { createLoginRateLimiter, createRegisterRateLimiter } from '../middleware/rateLimiter';
+import { createLoginRateLimiter, createRegisterRateLimiter, createGlobalRateLimiter } from '../middleware/rateLimiter';
 import { getConfig } from '../config/environment';
 import {
   generateGoogleOAuthState,
@@ -182,6 +193,105 @@ router.post('/logout', requireAuth, asyncHandler(async (req: Request, res: Respo
   res.status(200).json({
     success: true,
     message: '로그아웃되었습니다',
+    timestamp: new Date().toISOString()
+  });
+}));
+
+// ===== Phase 3: Email & Password Reset Routes =====
+
+/**
+ * POST /api/v1/auth/forgot-password
+ * 비밀번호 재설정 요청 (TASK-3-3)
+ * Rate Limit: 1시간에 3회
+ * 요청: { email: string }
+ * 응답: { success: boolean, message: string }
+ */
+router.post('/forgot-password', asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new Error('email이 필요합니다');
+  }
+
+  const result = await forgotPassword(email);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * POST /api/v1/auth/reset-password
+ * 비밀번호 재설정 (TASK-3-4)
+ * 요청: { token: string, password: string }
+ * 응답: { success: boolean, message: string }
+ */
+router.post('/reset-password', asyncHandler(async (req: Request, res: Response) => {
+  const { token, password } = req.body;
+
+  if (!token) {
+    throw new Error('token이 필요합니다');
+  }
+  if (!password) {
+    throw new Error('password가 필요합니다');
+  }
+
+  const result = await resetPassword(token, password);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * POST /api/v1/auth/change-password
+ * 비밀번호 변경 (TASK-3-5)
+ * 인증 필요 (로그인한 사용자만)
+ * 요청: { current_password: string, new_password: string }
+ * 응답: { success: boolean, message: string }
+ */
+router.post('/change-password', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const { current_password, new_password } = req.body;
+
+  if (!current_password) {
+    throw new Error('current_password가 필요합니다');
+  }
+  if (!new_password) {
+    throw new Error('new_password가 필요합니다');
+  }
+
+  const result = await changePassword(userId, current_password, new_password);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * POST /api/v1/auth/verify-email
+ * 이메일 인증 (TASK-3-2)
+ * 요청: { token: string }
+ * 응답: { success: boolean, message: string }
+ */
+router.post('/verify-email', asyncHandler(async (req: Request, res: Response) => {
+  const { token } = req.body;
+
+  if (!token) {
+    throw new Error('token이 필요합니다');
+  }
+
+  const result = await verifyEmail(token);
+
+  res.status(200).json({
+    success: true,
+    data: result,
     timestamp: new Date().toISOString()
   });
 }));
