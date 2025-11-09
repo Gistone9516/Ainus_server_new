@@ -1,6 +1,7 @@
 /**
- * Express 에러 핸들링 미들웨어
+ * Express 에러 핸들링 미들웨어 (TASK-1-19)
  * 모든 예외를 캡처하고 표준화된 응답 형식으로 변환
+ * 에러 코드 매핑을 사용한 HTTP 상태 코드 결정
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -12,22 +13,37 @@ import {
   determineAction,
   formatErrorLog
 } from '../exceptions';
+import { ERROR_CODES, getErrorDefinition } from '../constants/errorCodes';
 import { Logger } from '../database/logger';
 import { v4 as uuidv4 } from 'uuid';
 
 const logger = new Logger('ErrorHandler');
 
 /**
- * 예외를 표준화된 API 응답으로 변환
+ * 에러 메시지에서 에러 코드 추출
+ * 형식: "메시지 (ERROR_XXXX)" 또는 "메시지 (XXXX)"
+ */
+function extractErrorCode(message: string): string | undefined {
+  const match = message.match(/\((?:ERROR_)?(\d{4})\)/);
+  return match ? match[1] : undefined;
+}
+
+/**
+ * 예외를 표준화된 API 응답으로 변환 (TASK-1-19)
  */
 function formatErrorResponse(exception: AgentException, workflowId: string) {
   const severity = determineSeverity(exception);
   const action = determineAction(exception);
-  const logEntry = formatErrorLog(exception, workflowId);
 
-  // 심각도에 따른 HTTP 상태 코드 결정
+  // 에러 메시지에서 코드 추출
+  const extractedCode = extractErrorCode(exception.message);
+  const errorDefinition = extractedCode ? getErrorDefinition(extractedCode) : undefined;
+
+  // HTTP 상태 코드 결정 (에러 정의 > 예외 타입 > 기본값)
   let statusCode = 500;
-  if (exception instanceof ValidationException) {
+  if (errorDefinition) {
+    statusCode = errorDefinition.httpStatus;
+  } else if (exception instanceof ValidationException) {
     statusCode = 400;
   } else if (exception instanceof AuthenticationException) {
     statusCode = 401;
@@ -35,12 +51,16 @@ function formatErrorResponse(exception: AgentException, workflowId: string) {
     statusCode = 429;
   }
 
+  const apiErrorCode = extractedCode || exception.code;
+
   return {
     success: false,
     workflow_id: workflowId,
     error: {
-      code: exception.code,
+      code: apiErrorCode,
       message: exception.message,
+      status: statusCode,
+      category: errorDefinition?.category,
       failed_method: exception.method,
       retry_possible: exception.retry_able,
       severity,
@@ -53,6 +73,7 @@ function formatErrorResponse(exception: AgentException, workflowId: string) {
 /**
  * Express 에러 핸들러 미들웨어
  * 모든 라우트 핸들러의 에러를 이곳에서 처리
+ * TASK-1-19: 에러 코드 매핑 적용
  */
 export function errorHandler(
   error: any,
@@ -67,13 +88,11 @@ export function errorHandler(
     const logEntry = formatErrorLog(error, workflowId);
     logger.error(`AgentException: ${JSON.stringify(logEntry)}`, error);
 
-    const statusCode = error instanceof ValidationException ? 400 :
-                       error instanceof AuthenticationException ? 401 :
-                       error.code === 'RATE_LIMIT_ERROR' ? 429 : 500;
+    // formatErrorResponse에서 상태 코드를 결정함
+    const errorResponse = formatErrorResponse(error, workflowId);
+    const statusCode = (errorResponse.error as any).status || 500;
 
-    res.status(statusCode).json(
-      formatErrorResponse(error, workflowId)
-    );
+    res.status(statusCode).json(errorResponse);
     return;
   }
 
@@ -87,8 +106,10 @@ export function errorHandler(
     success: false,
     workflow_id: workflowId,
     error: {
-      code: 'UNKNOWN_ERROR',
+      code: '9999',
       message: 'An unexpected error occurred',
+      status: 500,
+      category: '서버 에러',
       details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     },
     timestamp: new Date().toISOString()

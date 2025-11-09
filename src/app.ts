@@ -6,6 +6,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import { getConfig } from './config/environment';
 import { errorHandler, asyncHandler } from './middleware/errorHandler';
+import { createGlobalRateLimiter } from './middleware/rateLimiter';
 import { Logger } from './database/logger';
 import { v4 as uuidv4 } from 'uuid';
 import authRouter from './routes/auth';
@@ -19,6 +20,10 @@ export function createApp(): Express {
   // 요청 본문 파싱
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // 전역 Rate Limiter (TASK-1-18)
+  // 모든 API 요청에 대한 속도 제한: 15분 내 100회
+  app.use(createGlobalRateLimiter());
 
   // 요청 ID 생성 및 설정
   app.use((req: Request, res: Response, next: NextFunction) => {

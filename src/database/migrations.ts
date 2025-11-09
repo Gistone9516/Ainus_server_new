@@ -19,6 +19,9 @@ export async function runMigrations(): Promise<void> {
     await createUsersTable();
     await createUserProfilesTable();
     await createUserSessionsTable();
+    await createUserSocialAccountsTable();
+    await createPasswordResetTokensTable();
+    await createLoginAuditLogsTable();
 
     // 2. AI 모델 정보 테이블
     await createAiModelsTable();
@@ -515,4 +518,82 @@ async function createModelComparisonCacheTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "model_comparison_cache" created');
+}
+
+/**
+ * TASK-1-4: user_social_accounts 테이블 (소셜 로그인용)
+ */
+async function createUserSocialAccountsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS user_social_accounts (
+      social_account_id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      provider VARCHAR(20) NOT NULL,
+      provider_user_id VARCHAR(255) NOT NULL,
+      provider_email VARCHAR(255),
+      provider_name VARCHAR(100),
+      provider_profile_image VARCHAR(500),
+      access_token_encrypted LONGTEXT,
+      refresh_token_encrypted LONGTEXT,
+      connected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      disconnected_at DATETIME,
+      last_login_at DATETIME,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_provider_account (provider, provider_user_id),
+      INDEX idx_user_id (user_id),
+      INDEX idx_provider (provider)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `;
+  await executeQuery(sql);
+  logger.info('Table "user_social_accounts" created');
+}
+
+/**
+ * TASK-1-5: password_reset_tokens 테이블
+ */
+async function createPasswordResetTokensTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      token_id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      token_hash VARCHAR(255) UNIQUE NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used_at DATETIME,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+      INDEX idx_user_id (user_id),
+      INDEX idx_expires_at (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `;
+  await executeQuery(sql);
+  logger.info('Table "password_reset_tokens" created');
+}
+
+/**
+ * TASK-1-6: login_audit_logs 테이블 (감사 로그)
+ */
+async function createLoginAuditLogsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS login_audit_logs (
+      log_id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT,
+      email VARCHAR(255),
+      status ENUM('success', 'failed', 'blocked') NOT NULL,
+      failure_reason VARCHAR(255),
+      ip_address VARCHAR(45),
+      user_agent VARCHAR(500),
+      device_type VARCHAR(50),
+      location_info JSON,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL,
+      INDEX idx_user_id (user_id),
+      INDEX idx_status (status),
+      INDEX idx_created_at (created_at),
+      INDEX idx_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `;
+  await executeQuery(sql);
+  logger.info('Table "login_audit_logs" created');
 }

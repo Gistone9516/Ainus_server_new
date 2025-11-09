@@ -260,6 +260,13 @@ class RedisCache {
       logger.error('Redis close failed', error);
     }
   }
+
+  /**
+   * Redis 클라이언트 직접 접근 (Rate Limiting 등에서 사용)
+   */
+  getClient(): Redis {
+    return this.getRedis();
+  }
 }
 
 // 싱글톤 인스턴스

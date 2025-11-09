@@ -58,8 +58,13 @@ export interface JwtPayload {
   user_id: number;
   email: string;
   nickname: string;
+  auth_provider?: string;
   iat: number;
   exp: number;
+  iss?: string; // issuer
+  aud?: string; // audience
+  jti?: string; // JWT ID (token unique identifier)
+  token_type?: 'access' | 'refresh'; // 토큰 타입
 }
 
 /**

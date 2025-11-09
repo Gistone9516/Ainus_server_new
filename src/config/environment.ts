@@ -20,6 +20,11 @@ export interface AppConfig {
     expiry: string;
   };
 
+  // Encryption (Phase 2)
+  encryption: {
+    key: string;
+  };
+
   // Database
   database: {
     host: string;
@@ -38,6 +43,36 @@ export interface AppConfig {
     port: number;
     password?: string;
     db: number;
+  };
+
+  // OAuth 2.0 Configuration (Phase 2)
+  oauth: {
+    google: {
+      clientId: string;
+      clientSecret: string;
+      redirectUri: string;
+    };
+    kakao: {
+      clientId: string;
+      clientSecret: string;
+      redirectUri: string;
+    };
+    naver: {
+      clientId: string;
+      clientSecret: string;
+      redirectUri: string;
+    };
+  };
+
+  // Email Configuration (Phase 3)
+  email: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    password: string;
+    from: string;
+    name: string;
   };
 
   // External APIs
@@ -89,6 +124,10 @@ export function loadConfig(): AppConfig {
       expiry: process.env.JWT_EXPIRY || '30d'
     },
 
+    encryption: {
+      key: process.env.ENCRYPTION_KEY || 'your-32-byte-encryption-key-here!'
+    },
+
     database: {
       host: process.env.DB_HOST!,
       port: parseInt(process.env.DB_PORT || '3306', 10),
@@ -105,6 +144,34 @@ export function loadConfig(): AppConfig {
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
       db: 0
+    },
+
+    oauth: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID || '',
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/google/callback'
+      },
+      kakao: {
+        clientId: process.env.KAKAO_CLIENT_ID || '',
+        clientSecret: process.env.KAKAO_CLIENT_SECRET || '',
+        redirectUri: process.env.KAKAO_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/kakao/callback'
+      },
+      naver: {
+        clientId: process.env.NAVER_CLIENT_ID || '',
+        clientSecret: process.env.NAVER_CLIENT_SECRET || '',
+        redirectUri: process.env.NAVER_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/naver/callback'
+      }
+    },
+
+    email: {
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587', 10),
+      secure: process.env.EMAIL_SECURE === 'true', // true for 465, false for other ports
+      user: process.env.EMAIL_USER || 'your-email@gmail.com',
+      password: process.env.EMAIL_PASSWORD || 'your-password',
+      from: process.env.EMAIL_FROM || 'noreply@ainus.example.com',
+      name: process.env.EMAIL_FROM_NAME || 'Ainus'
     },
 
     externalApis: {
