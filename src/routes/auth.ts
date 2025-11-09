@@ -4,7 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { register, login, logout, getUserInfo } from '../services/AuthService';
+import { register, login, logout, getUserInfo, checkEmailAvailability } from '../services/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -12,15 +12,19 @@ const router = Router();
 
 /**
  * POST /api/v1/auth/register
- * 회원가입
+ * 회원가입 (TASK-1-7)
+ * 요청: { email, password, nickname, terms_agreed, privacy_agreed, marketing_agreed? }
  */
 router.post('/register', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password, nickname } = req.body;
+  const { email, password, nickname, terms_agreed, privacy_agreed, marketing_agreed } = req.body;
 
   const result = await register({
     email,
     password,
-    nickname
+    nickname,
+    terms_agreed,
+    privacy_agreed,
+    marketing_agreed
   });
 
   res.status(201).json({
@@ -31,15 +35,62 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /**
+ * GET /api/v1/auth/check-email
+ * 이메일 중복 확인 (TASK-1-9)
+ * 요청: ?email=user@example.com
+ * 응답: { available: boolean, message: string }
+ */
+router.get('/check-email', asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.query;
+
+  if (!email || typeof email !== 'string') {
+    throw new Error('email 파라미터가 필요합니다');
+  }
+
+  const result = await checkEmailAvailability(email);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
+ * Helper function to extract client IP address
+ */
+function getClientIp(req: Request): string {
+  // 프록시를 통한 요청인 경우
+  const forwarded = req.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  // 직접 연결
+  return (
+    req.socket.remoteAddress ||
+    req.connection.remoteAddress ||
+    req.ip ||
+    'unknown'
+  );
+}
+
+/**
  * POST /api/v1/auth/login
- * 로그인
+ * 로그인 (TASK-1-10)
+ * 요청: { email, password, device_type? }
+ * 응답: { user: {...}, tokens: { access_token, token_type, expires_in } }
  */
 router.post('/login', asyncHandler(async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, password, device_type } = req.body;
+  const ip_address = getClientIp(req);
+  const user_agent = req.get('user-agent') || 'unknown';
 
   const result = await login({
     email,
-    password
+    password,
+    ip_address,
+    user_agent,
+    device_type
   });
 
   res.status(200).json({
