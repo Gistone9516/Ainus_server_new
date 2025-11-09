@@ -4,7 +4,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { register, login, logout, getUserInfo, checkEmailAvailability } from '../services/AuthService';
+import { register, login, logout, getUserInfo, checkEmailAvailability, refreshAccessToken } from '../services/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -117,14 +117,38 @@ router.get('/me', requireAuth, asyncHandler(async (req: Request, res: Response) 
 }));
 
 /**
+ * POST /api/v1/auth/refresh
+ * Access Token 갱신 (TASK-1-15)
+ * 요청: { refresh_token: string }
+ * 응답: { access_token, refresh_token?, token_type, expires_in }
+ */
+router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
+  const { refresh_token } = req.body;
+
+  if (!refresh_token) {
+    throw new Error('refresh_token이 필요합니다');
+  }
+
+  const result = await refreshAccessToken(refresh_token, true);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+    timestamp: new Date().toISOString()
+  });
+}));
+
+/**
  * POST /api/v1/auth/logout
- * 로그아웃 (선택적)
+ * 로그아웃 (TASK-1-16)
+ * 요청 (선택): { refresh_token?: string }
  */
 router.post('/logout', requireAuth, asyncHandler(async (req: Request, res: Response) => {
   const authHeader = req.get('Authorization');
-  const token = authHeader ? authHeader.slice(7) : '';
+  const accessToken = authHeader ? authHeader.slice(7) : '';
+  const { refresh_token } = req.body;
 
-  await logout(token);
+  await logout(accessToken, refresh_token);
 
   res.status(200).json({
     success: true,

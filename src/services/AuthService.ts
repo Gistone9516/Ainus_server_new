@@ -6,7 +6,7 @@
 
 import { executeQuery, queryOne, executeModify } from '../database/mysql';
 import { getRedisCache } from '../database/redis';
-import { generateToken, verifyToken } from '../utils/jwt';
+import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../utils/jwt';
 import { hashPassword, verifyPassword } from '../utils/password';
 import { isStrongPassword } from '../utils/passwordValidator';
 import {
@@ -56,6 +56,7 @@ interface LoginResult {
   };
   tokens: {
     access_token: string;
+    refresh_token: string;
     token_type: string;
     expires_in: number;
   };
@@ -369,8 +370,34 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
       console.error(`감사 로그 기록 실패: ${auditError}`);
     }
 
-    // 토큰 생성
-    const access_token = generateToken(user.user_id, user.email, user.nickname);
+    // 토큰 생성 (TASK-1-13, 1-15: Refresh Token 추가)
+    const access_token = generateAccessToken(
+      user.user_id,
+      user.email,
+      user.nickname,
+      user.auth_provider
+    );
+    const refresh_token = generateRefreshToken(
+      user.user_id,
+      user.email,
+      user.nickname,
+      user.auth_provider
+    );
+
+    // Refresh Token을 Redis에 저장 (토큰 갱신 시 검증용)
+    try {
+      const redisCache = getRedisCache();
+      const decodedRefresh = decodeToken(refresh_token);
+      if (decodedRefresh?.jti) {
+        const refreshTokenKey = `refresh:${user.user_id}:${decodedRefresh.jti}`;
+        const refreshTokenTTL = 7 * 24 * 60 * 60; // 7일
+        await redisCache.set(refreshTokenKey, refresh_token, refreshTokenTTL);
+      }
+    } catch (redisError) {
+      console.error(`Refresh Token Redis 저장 실패: ${redisError}`);
+      // Redis 실패는 로그인을 막지 않음
+    }
+
     const expires_in = 900; // 15분 (초 단위)
 
     return {
@@ -382,6 +409,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
       },
       tokens: {
         access_token,
+        refresh_token,
         token_type: 'Bearer',
         expires_in
       }
@@ -499,19 +527,136 @@ export async function checkEmailAvailability(email: string): Promise<{
 }
 
 /**
- * 로그아웃 (토큰 블랙리스트 처리)
+ * 토큰 갱신 (TASK-1-15)
+ * Refresh Token으로 새로운 Access Token 발급
+ * 선택: 새로운 Refresh Token도 발급 (토큰 로테이션)
  */
-export async function logout(token: string): Promise<void> {
+export async function refreshAccessToken(
+  refreshToken: string,
+  issueNewRefreshToken: boolean = true
+): Promise<{
+  access_token: string;
+  refresh_token?: string;
+  token_type: string;
+  expires_in: number;
+}> {
+  const methodName = 'refreshAccessToken';
+
+  try {
+    // 1단계: Refresh Token 검증
+    let payload: any;
+    try {
+      payload = verifyToken(refreshToken);
+    } catch (error) {
+      throw new AuthenticationException(
+        `유효하지 않은 Refresh Token입니다 (ERROR_3001)`,
+        methodName
+      );
+    }
+
+    // 토큰이 Refresh Token인지 확인
+    if (payload.token_type !== 'refresh') {
+      throw new AuthenticationException(
+        `유효하지 않은 토큰 타입입니다 (ERROR_3001)`,
+        methodName
+      );
+    }
+
+    // 2단계: Redis에서 토큰 검증 (블랙리스트 확인)
+    const redisCache = getRedisCache();
+    const refreshTokenKey = `refresh:${payload.user_id}:${payload.jti}`;
+    const storedToken = await redisCache.get(refreshTokenKey);
+
+    if (!storedToken) {
+      throw new AuthenticationException(
+        `Refresh Token이 무효화되었습니다 (ERROR_3003)`,
+        methodName
+      );
+    }
+
+    // 3단계: 새로운 Access Token 발급
+    const newAccessToken = generateAccessToken(
+      payload.user_id,
+      payload.email,
+      payload.nickname,
+      payload.auth_provider
+    );
+
+    let newRefreshToken: string | undefined;
+    if (issueNewRefreshToken) {
+      // 토큰 로테이션: 기존 Refresh Token 무효화, 새로운 발급
+      newRefreshToken = generateRefreshToken(
+        payload.user_id,
+        payload.email,
+        payload.nickname,
+        payload.auth_provider
+      );
+
+      // 새로운 Refresh Token을 Redis에 저장
+      const decodedNew = decodeToken(newRefreshToken);
+      if (decodedNew?.jti) {
+        const newRefreshTokenKey = `refresh:${payload.user_id}:${decodedNew.jti}`;
+        const refreshTokenTTL = 7 * 24 * 60 * 60;
+        await redisCache.set(newRefreshTokenKey, newRefreshToken, refreshTokenTTL);
+      }
+
+      // 기존 Refresh Token 무효화
+      await redisCache.delete(refreshTokenKey);
+    }
+
+    const expires_in = 900; // 15분
+
+    return {
+      access_token: newAccessToken,
+      refresh_token: newRefreshToken,
+      token_type: 'Bearer',
+      expires_in
+    };
+  } catch (error) {
+    if (error instanceof AuthenticationException) throw error;
+    throw new AuthenticationException(`토큰 갱신 실패: ${error}`, methodName);
+  }
+}
+
+/**
+ * 로그아웃 (토큰 블랙리스트 처리)
+ * TASK-1-16: Refresh Token 무효화
+ */
+export async function logout(
+  accessToken: string,
+  refreshToken?: string
+): Promise<void> {
   const methodName = 'logout';
 
   try {
-    const payload = verifyToken(token);
     const redisCache = getRedisCache();
 
-    // 토큰을 블랙리스트에 추가 (만료 시간까지 보유)
-    const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
-    if (ttl > 0) {
-      await redisCache.set(`blacklist:${token}`, 'true', ttl);
+    // Access Token을 블랙리스트에 추가
+    try {
+      const payload = verifyToken(accessToken);
+      const ttl = Math.max(0, payload.exp - Math.floor(Date.now() / 1000));
+      if (ttl > 0) {
+        await redisCache.set(`blacklist:${accessToken}`, 'true', ttl);
+      }
+    } catch (error) {
+      console.error(`Access Token 블랙리스트 저장 실패: ${error}`);
+    }
+
+    // Refresh Token을 블랙리스트에 추가
+    if (refreshToken) {
+      try {
+        const payload = verifyToken(refreshToken);
+        if (payload.token_type === 'refresh') {
+          const refreshTokenKey = `refresh:${payload.user_id}:${payload.jti}`;
+          await redisCache.delete(refreshTokenKey);
+
+          // 모든 세션 토큰 무효화 (선택사항)
+          // const sessionsKey = `sessions:${payload.user_id}:*`;
+          // await redisCache.deletePattern(sessionsKey);
+        }
+      } catch (error) {
+        console.error(`Refresh Token 무효화 실패: ${error}`);
+      }
     }
   } catch (error) {
     if (error instanceof AuthenticationException) throw error;

@@ -1,9 +1,11 @@
 /**
  * JWT 토큰 관리 유틸리티
  * 토큰 생성, 검증, 갱신
+ * TASK-1-13, 1-14, 1-15 구현
  */
 
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import { getConfig } from '../config/environment';
 import { JwtPayload } from '../types';
 import { AuthenticationException } from '../exceptions';
@@ -11,18 +13,33 @@ import { AuthenticationException } from '../exceptions';
 const config = getConfig();
 
 /**
- * JWT 토큰 생성
+ * Access Token 생성 (TASK-1-13)
+ * 유효 기간: 15분
  */
-export function generateToken(user_id: number, email: string, nickname: string): string {
-  const methodName = 'generateToken';
+export function generateAccessToken(
+  user_id: number,
+  email: string,
+  nickname: string,
+  auth_provider: string = 'local'
+): string {
+  const methodName = 'generateAccessToken';
 
   try {
+    const jti = uuidv4();
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + (15 * 60); // 15분
+
     const payload: JwtPayload = {
       user_id,
       email,
       nickname,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60) // 30일
+      auth_provider,
+      jti,
+      iat,
+      exp,
+      iss: 'ainus',
+      aud: 'ainus-app',
+      token_type: 'access'
     };
 
     const token = jwt.sign(payload, config.jwt.secret, {
@@ -32,10 +49,61 @@ export function generateToken(user_id: number, email: string, nickname: string):
     return token;
   } catch (error) {
     throw new AuthenticationException(
-      `토큰 생성 실패: ${error}`,
+      `Access Token 생성 실패: ${error}`,
       methodName
     );
   }
+}
+
+/**
+ * Refresh Token 생성 (TASK-1-13)
+ * 유효 기간: 7일
+ */
+export function generateRefreshToken(
+  user_id: number,
+  email: string,
+  nickname: string,
+  auth_provider: string = 'local'
+): string {
+  const methodName = 'generateRefreshToken';
+
+  try {
+    const jti = uuidv4();
+    const iat = Math.floor(Date.now() / 1000);
+    const exp = iat + (7 * 24 * 60 * 60); // 7일
+
+    const payload: JwtPayload = {
+      user_id,
+      email,
+      nickname,
+      auth_provider,
+      jti,
+      iat,
+      exp,
+      iss: 'ainus',
+      aud: 'ainus-app',
+      token_type: 'refresh'
+    };
+
+    const token = jwt.sign(payload, config.jwt.secret, {
+      algorithm: 'HS256'
+    });
+
+    return token;
+  } catch (error) {
+    throw new AuthenticationException(
+      `Refresh Token 생성 실패: ${error}`,
+      methodName
+    );
+  }
+}
+
+/**
+ * 호환성: 기존 generateToken() 유지
+ * 새로운 코드에서는 generateAccessToken() 사용 권장
+ */
+export function generateToken(user_id: number, email: string, nickname: string): string {
+  return generateAccessToken(user_id, email, nickname);
 }
 
 /**
