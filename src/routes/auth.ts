@@ -7,15 +7,21 @@ import { Router, Request, Response } from 'express';
 import { register, login, logout, getUserInfo, checkEmailAvailability, refreshAccessToken } from '../services/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
+import { createLoginRateLimiter, createRegisterRateLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
+
+// Rate Limiters (TASK-1-18)
+const loginRateLimiter = createLoginRateLimiter();
+const registerRateLimiter = createRegisterRateLimiter();
 
 /**
  * POST /api/v1/auth/register
  * 회원가입 (TASK-1-7)
+ * Rate Limit: 1시간에 3회 (TASK-1-18)
  * 요청: { email, password, nickname, terms_agreed, privacy_agreed, marketing_agreed? }
  */
-router.post('/register', asyncHandler(async (req: Request, res: Response) => {
+router.post('/register', registerRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { email, password, nickname, terms_agreed, privacy_agreed, marketing_agreed } = req.body;
 
   const result = await register({
@@ -77,10 +83,11 @@ function getClientIp(req: Request): string {
 /**
  * POST /api/v1/auth/login
  * 로그인 (TASK-1-10)
+ * Rate Limit: 15분에 5회 (TASK-1-18)
  * 요청: { email, password, device_type? }
  * 응답: { user: {...}, tokens: { access_token, token_type, expires_in } }
  */
-router.post('/login', asyncHandler(async (req: Request, res: Response) => {
+router.post('/login', loginRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const { email, password, device_type } = req.body;
   const ip_address = getClientIp(req);
   const user_agent = req.get('user-agent') || 'unknown';
