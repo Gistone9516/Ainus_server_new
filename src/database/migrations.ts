@@ -35,6 +35,11 @@ export async function runMigrations(): Promise<void> {
     await createJobOccupationsTable();
     await createInterestTagsTable();
 
+    // 3.5. Feature #8: 개인화된 AI 트렌드 모니터링
+    await createJobsTable();
+    await createJobToInterestTagsTable();
+    await createUserInterestTagsTable();
+
     // 4. 이슈 지수 테이블
     await createIssueIndexDailyTable();
     await createIssueIndexByCategoryTable();
@@ -596,4 +601,122 @@ async function createLoginAuditLogsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "login_audit_logs" created');
+}
+
+// ==================== Feature #8: 개인화된 AI 트렌드 모니터링 ====================
+
+/**
+ * Feature #8: 직업 카테고리 테이블 (13개 표준 직업)
+ */
+async function createJobsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS jobs (
+      id INT PRIMARY KEY AUTO_INCREMENT COMMENT '직업 ID',
+      job_code VARCHAR(50) NOT NULL UNIQUE COMMENT '직업 코드',
+      job_name_ko VARCHAR(100) NOT NULL COMMENT '한글명',
+      job_name_en VARCHAR(100) NOT NULL COMMENT '영문명',
+      description TEXT COMMENT '직업 설명',
+      icon_url VARCHAR(500) COMMENT '아이콘 이미지 URL',
+      sort_order INT DEFAULT 0 COMMENT '정렬 순서',
+      is_active BOOLEAN DEFAULT TRUE COMMENT '활성화 여부',
+
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_code (job_code),
+      INDEX idx_active (is_active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='13개 표준 직업 카테고리 (Feature #8)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "jobs" created');
+
+  // 초기 데이터 삽입 (표준 13개 직업)
+  const insertSql = `
+    INSERT IGNORE INTO jobs (id, job_code, job_name_ko, job_name_en, sort_order) VALUES
+    (1, 'TECH_DEV', '기술/개발', 'Tech/Development', 1),
+    (2, 'CREATIVE', '창작/콘텐츠', 'Creative/Content', 2),
+    (3, 'ANALYSIS', '분석/사무', 'Analysis/Administrative', 3),
+    (4, 'HEALTHCARE', '의료/과학', 'Healthcare/Science', 4),
+    (5, 'EDUCATION', '교육', 'Education', 5),
+    (6, 'BUSINESS', '비즈니스', 'Business', 6),
+    (7, 'MANUFACTURING', '제조/건설', 'Manufacturing/Construction', 7),
+    (8, 'SERVICE', '서비스', 'Service', 8),
+    (9, 'STARTUP', '창업/자영업', 'Startup/Self-Employment', 9),
+    (10, 'AGRICULTURE', '농업/축산업', 'Agriculture/Livestock', 10),
+    (11, 'FISHERIES', '어업/해상업', 'Fisheries/Maritime', 11),
+    (12, 'STUDENT', '학생', 'Student', 12),
+    (13, 'OTHER', '기타', 'Others', 13);
+  `;
+  await executeModify(insertSql);
+  logger.info('Initial data inserted into "jobs"');
+}
+
+/**
+ * Feature #8: 직업-태그 추천 매핑 테이블
+ */
+async function createJobToInterestTagsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS job_to_interest_tags (
+      id INT AUTO_INCREMENT PRIMARY KEY COMMENT '매핑 ID',
+
+      job_category_id INT NOT NULL COMMENT '직업 카테고리 ID',
+      job_category_name VARCHAR(100) NOT NULL COMMENT '직업명',
+
+      interest_tag_id INT NOT NULL COMMENT '관심사 태그 ID',
+      interest_tag_name VARCHAR(100) NOT NULL COMMENT '태그명',
+
+      recommendation_rank INT DEFAULT 1 COMMENT '추천 순위',
+      recommendation_reason VARCHAR(255) NULL COMMENT '추천 이유',
+
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+      UNIQUE KEY uk_job_tag (job_category_id, interest_tag_id),
+      INDEX idx_job_category (job_category_id),
+      INDEX idx_recommendation_rank (recommendation_rank),
+      FOREIGN KEY (job_category_id) REFERENCES jobs(id) ON DELETE CASCADE,
+      FOREIGN KEY (interest_tag_id) REFERENCES interest_tags(interest_tag_id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='13개 직업별 추천 관심사 태그 (Feature #8)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "job_to_interest_tags" created');
+}
+
+/**
+ * Feature #8: 사용자 관심 태그 테이블
+ */
+async function createUserInterestTagsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS user_interest_tags (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '사용자-태그 관계 ID',
+
+      user_id INT NOT NULL COMMENT 'users FK',
+      tag_id INT NOT NULL COMMENT 'interest_tags FK',
+
+      selected_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '선택 시간',
+
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES interest_tags(interest_tag_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_user_tag (user_id, tag_id),
+      INDEX idx_user (user_id),
+      INDEX idx_tag (tag_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='사용자가 선택한 관심사 태그 (Feature #8)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "user_interest_tags" created');
+
+  // user_profiles에 job_category_id 추가
+  const alterSql = `
+    ALTER TABLE user_profiles
+    ADD COLUMN IF NOT EXISTS job_category_id INT COMMENT 'jobs FK (Feature #8)' AFTER user_id;
+  `;
+  try {
+    await executeQuery(alterSql);
+    logger.info('Added job_category_id column to user_profiles');
+  } catch (error) {
+    logger.warn('Failed to add job_category_id to user_profiles', error);
+  }
 }

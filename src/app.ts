@@ -10,6 +10,7 @@ import { createGlobalRateLimiter } from './middleware/rateLimiter';
 import { Logger } from './database/logger';
 import { v4 as uuidv4 } from 'uuid';
 import authRouter from './routes/auth';
+import trendMonitoringRouter from './routes/trendMonitoring';
 
 const logger = new Logger('App');
 
@@ -63,6 +64,12 @@ export function createApp(): Express {
 
   // 라우트 마운트
   app.use('/api/v1/auth', authRouter);
+
+  // Feature #8: 개인화된 AI 트렌드 모니터링
+  app.use('/api/v1/jobs', trendMonitoringRouter);
+  app.use('/api/v1/users/profile', trendMonitoringRouter);
+  app.use('/api/v1/news', trendMonitoringRouter);
+
   // app.use('/api/v1/models', modelsRouter);
   // app.use('/api/v1/community', communityRouter);
   // ...
