@@ -32,8 +32,14 @@ export function createLoginRateLimiter(): RateLimitRequestHandler {
       return req.method === 'OPTIONS';
     },
     handler: (req: Request, res: Response) => {
-      const resetTime = req.rateLimit?.resetTime as number | undefined;
-      const retryAfter = resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : 60;
+      const reset = req.rateLimit?.resetTime;
+      const resetMs =
+        reset instanceof Date
+          ? reset.getTime()
+          : typeof reset === 'number'
+          ? reset
+          : undefined;
+      const retryAfter = resetMs ? Math.ceil((resetMs - Date.now()) / 1000) : 60;
       res.status(429).json({
         success: false,
         error: {
@@ -68,8 +74,14 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
       return req.method === 'OPTIONS';
     },
     handler: (req: Request, res: Response) => {
-      const resetTime = req.rateLimit?.resetTime as number | undefined;
-      const retryAfter = resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : 3600;
+      const reset = req.rateLimit?.resetTime;
+      const resetMs =
+        reset instanceof Date
+          ? reset.getTime()
+          : typeof reset === 'number'
+          ? reset
+          : undefined;
+      const retryAfter = resetMs ? Math.ceil((resetMs - Date.now()) / 1000) : 3600;
       res.status(429).json({
         success: false,
         error: {
@@ -86,14 +98,23 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
 }
 
 /**
- * 전역 API Rate Limiter
- * 15분 내 100회 제한
+ * 전역/커스텀 API Rate Limiter
+ * 기본값: 15분 내 100회 제한
  */
-export function createGlobalRateLimiter(): RateLimitRequestHandler {
+export function createGlobalRateLimiter(options?: {
+  windowMs?: number;
+  max?: number;
+  message?: string;
+}): RateLimitRequestHandler {
+  const windowMs = options?.windowMs ?? 15 * 60 * 1000;
+  const max = options?.max ?? 100;
+  const message =
+    options?.message ?? 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요';
+
   return rateLimit({
-    windowMs: 15 * 60 * 1000, // 15분
-    max: 100, // 최대 100회
-    message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요',
+    windowMs,
+    max,
+    message,
     statusCode: 429,
     keyGenerator: (req: Request) => {
       const forwarded = req.get('x-forwarded-for');
@@ -109,7 +130,7 @@ export function createGlobalRateLimiter(): RateLimitRequestHandler {
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요'
+          message
         },
         timestamp: new Date().toISOString()
       });

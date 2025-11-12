@@ -78,3 +78,105 @@ export interface MethodResult<T = any> {
     error: string;
   }>;
 }
+
+/**
+ * ===== 기능 #4: 모델 추천 관련 타입 =====
+ */
+
+/**
+ * SLM 분류 결과
+ */
+export interface SLMClassificationResult {
+  category_id: number;
+  category_name: string;
+  category_en: string;
+  confidence: number;
+  is_confident: boolean;
+  reasoning?: string;
+  alternatives?: Array<{
+    rank: number;
+    category_id: number;
+    category_name: string;
+    confidence: number;
+    description?: string;
+  }>;
+}
+
+/**
+ * 모델 추천 요청 (통합 SLM 분류 + 추천)
+ */
+export interface RecommendByInputRequest {
+  user_input: string;
+  user_id?: string;
+  limit?: number;
+}
+
+/**
+ * 모델 추천 요청 (카테고리 기반)
+ */
+export interface RecommendByCategoryRequest {
+  category_id: number;
+  user_id?: string;
+  limit?: number;
+}
+
+/**
+ * SLM 분류 요청
+ */
+export interface SlmClassifyRequest {
+  user_input: string;
+  top_k?: number;
+}
+
+/**
+ * 카테고리 조회 응답
+ */
+export interface CategoriesResponse {
+  id: number;
+  code: string;
+  name: string;
+  name_en: string;
+  description?: string;
+  icon_url?: string;
+}
+
+/**
+ * 추천 모델 정보 (응답용)
+ */
+export interface RecommendedModelInfo {
+  rank: number;
+  model_id: number;
+  model_name: string;
+  provider: string;
+  base_score: number;
+  task_category: string;
+  score_source?: {
+    benchmark: string;
+    weight_formula: string;
+  };
+  reasoning?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  personalized_score?: number;
+  final_score?: number;
+}
+
+/**
+ * 모델 추천 응답 데이터
+ */
+export interface ModelRecommendationData {
+  classification: SLMClassificationResult;
+  recommended_models: RecommendedModelInfo[];
+}
+
+/**
+ * 카테고리 기반 추천 응답 데이터
+ */
+export interface CategoryRecommendationData {
+  category: {
+    id: number;
+    name: string;
+    icon_url?: string;
+  };
+  recommended_models: RecommendedModelInfo[];
+}
