@@ -45,6 +45,14 @@ export interface AppConfig {
     db: number;
   };
 
+  // Elasticsearch
+  elasticsearch: {
+    node: string;
+    username?: string;
+    password?: string;
+    enabled: boolean;
+  };
+
   // OAuth 2.0 Configuration (Phase 2)
   oauth: {
     google: {
@@ -144,6 +152,13 @@ export function loadConfig(): AppConfig {
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
       db: 0
+    },
+
+    elasticsearch: {
+      node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+      username: process.env.ELASTICSEARCH_USERNAME,
+      password: process.env.ELASTICSEARCH_PASSWORD,
+      enabled: process.env.ELASTICSEARCH_ENABLED !== 'false'
     },
 
     oauth: {

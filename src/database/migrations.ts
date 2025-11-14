@@ -15,13 +15,11 @@ export async function runMigrations(): Promise<void> {
   logger.info('Starting database migrations...');
 
   try {
-    // 1. 사용자 및 인증 테이블
-    await createUsersTable();
-    await createUserProfilesTable();
-    await createUserSessionsTable();
-    await createUserSocialAccountsTable();
-    await createPasswordResetTokensTable();
-    await createLoginAuditLogsTable();
+    // 1. 카테고리 및 태그 테이블 (먼저 생성 - FK 참조용)
+    await createAiCategoriesTable();
+    await createJobCategoriesTable();
+    await createJobOccupationsTable();
+    await createInterestTagsTable();
 
     // 2. AI 모델 정보 테이블
     await createAiModelsTable();
@@ -29,11 +27,13 @@ export async function runMigrations(): Promise<void> {
     await createModelUpdatesTable();
     await createModelUpdatesDetailsTable();
 
-    // 3. 카테고리 및 태그 테이블
-    await createAiCategoriesTable();
-    await createJobCategoriesTable();
-    await createJobOccupationsTable();
-    await createInterestTagsTable();
+    // 3. 사용자 및 인증 테이블
+    await createUsersTable();
+    await createUserProfilesTable();
+    await createUserSessionsTable();
+    await createUserSocialAccountsTable();
+    await createPasswordResetTokensTable();
+    await createLoginAuditLogsTable();
 
     // 4. 이슈 지수 테이블
     await createIssueIndexDailyTable();
@@ -48,6 +48,7 @@ export async function runMigrations(): Promise<void> {
     await createCommunityCommentsTable();
     await createCommunityPostLikesTable();
     await createCommunityPostTagsTable();
+    await createCommunityPostBookmarksTable();
 
     // 7. 관심 모델 및 알림 테이블
     await createUserInterestedModelsTable();
@@ -355,16 +356,21 @@ async function createCommunityPostsTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS community_posts (
       post_id INT PRIMARY KEY AUTO_INCREMENT,
       user_id INT NOT NULL,
-      title VARCHAR(255) NOT NULL,
-      content TEXT NOT NULL,
-      likes_count INT DEFAULT 0,
-      comments_count INT DEFAULT 0,
-      views_count INT DEFAULT 0,
+      title VARCHAR(200) NOT NULL COMMENT '제목',
+      content LONGTEXT NOT NULL COMMENT '본문 (마크다운)',
+      content_preview VARCHAR(500) COMMENT '미리보기 (첫 150자)',
+      category VARCHAR(50) NOT NULL COMMENT '카테고리 (prompt_tip/coding/tips)',
+      likes_count INT DEFAULT 0 COMMENT '좋아요 수',
+      comments_count INT DEFAULT 0 COMMENT '댓글 수',
+      views_count INT DEFAULT 0 COMMENT '조회수',
+      is_active BOOLEAN DEFAULT TRUE COMMENT '활성화 여부 (삭제 시 FALSE)',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
       INDEX idx_user_id (user_id),
-      INDEX idx_created_at (created_at)
+      INDEX idx_category (category),
+      INDEX idx_created_at (created_at),
+      INDEX idx_active (is_active)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `;
   await executeQuery(sql);
@@ -377,14 +383,16 @@ async function createCommunityCommentsTable(): Promise<void> {
       comment_id INT PRIMARY KEY AUTO_INCREMENT,
       post_id INT NOT NULL,
       user_id INT NOT NULL,
-      content TEXT NOT NULL,
-      likes_count INT DEFAULT 0,
+      content VARCHAR(500) NOT NULL COMMENT '댓글 내용',
+      likes_count INT DEFAULT 0 COMMENT '좋아요 수',
+      is_active BOOLEAN DEFAULT TRUE COMMENT '활성화 여부',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
       INDEX idx_post_id (post_id),
-      INDEX idx_user_id (user_id)
+      INDEX idx_user_id (user_id),
+      INDEX idx_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `;
   await executeQuery(sql);
@@ -423,6 +431,24 @@ async function createCommunityPostTagsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "community_post_tags" created');
+}
+
+async function createCommunityPostBookmarksTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS community_post_bookmarks (
+      bookmark_id INT PRIMARY KEY AUTO_INCREMENT,
+      post_id INT NOT NULL,
+      user_id INT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_post_user (post_id, user_id),
+      INDEX idx_user_id (user_id),
+      INDEX idx_post_id (post_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `;
+  await executeQuery(sql);
+  logger.info('Table "community_post_bookmarks" created');
 }
 
 async function createUserInterestedModelsTable(): Promise<void> {

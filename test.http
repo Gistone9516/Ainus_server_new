@@ -1,0 +1,29 @@
+### 1. 게시글 목록 조회 (인증 불필요)
+GET http://localhost:3000/api/v1/community/posts?page=1&limit=10
+
+### 2. 게시글 상세 조회
+GET http://localhost:3000/api/v1/community/posts/1
+
+### 3. 검색
+GET http://localhost:3000/api/v1/community/search?q=프롬프트&page=1
+
+### 4. 게시글 작성 (인증 필요)
+POST http://localhost:3000/api/v1/community/posts
+Content-Type: application/json
+
+{
+  "title": "ChatGPT로 블로그 글 10배 빠르게 작성하는 법",
+  "content": "# 프롬프트 예시\n## 단계별 가이드\n\n이것은 좋은 팁입니다!",
+  "category": "prompt_tip"
+}
+
+### 5. 좋아요
+POST http://localhost:3000/api/v1/community/posts/1/like
+
+### 6. 댓글 작성
+POST http://localhost:3000/api/v1/community/posts/1/comments
+Content-Type: application/json
+
+{
+  "content": "정말 유용한 팁입니다!"
+}

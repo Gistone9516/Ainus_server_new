@@ -7,6 +7,17 @@
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
+/**
+ * IP 주소 추출 헬퍼 (IPv6 호환)
+ */
+function getClientIp(req: Request): string {
+  const forwarded = req.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
 // TODO: 프로덕션 환경에서는 rate-limit-redis를 사용하여 분산 환경 지원
 // import RedisStore from 'rate-limit-redis';
 
@@ -23,8 +34,7 @@ export function createLoginRateLimiter(): RateLimitRequestHandler {
     statusCode: 429,
     keyGenerator: (req: Request) => {
       // IP 주소 기반 제한
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      const ip = getClientIp(req);
       return `${ip}:login`;
     },
     skip: (req: Request) => {
@@ -60,8 +70,7 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
     message: '회원가입 시도 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      const ip = getClientIp(req);
       return `${ip}:register`;
     },
     skip: (req: Request) => {
@@ -96,9 +105,7 @@ export function createGlobalRateLimiter(): RateLimitRequestHandler {
     message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return ip;
+      return getClientIp(req);
     },
     skip: (req: Request) => {
       // 헬스 체크는 제한하지 않음

@@ -23,11 +23,15 @@ async function startServer(): Promise<void> {
     await dbPool.initialize();
     logger.info('Database pool initialized successfully');
 
-    // Redis 캐시 초기화
+    // Redis 캐시 초기화 (선택적)
     logger.info('Initializing Redis cache...');
     const redisCache = getRedisCache();
-    await redisCache.initialize();
-    logger.info('Redis cache initialized successfully');
+    try {
+      await redisCache.initialize();
+      logger.info('Redis cache initialized successfully');
+    } catch (error) {
+      logger.warn('Redis cache initialization failed. Server will run without caching.', error);
+    }
 
     // Express 애플리케이션 생성
     const app = createApp();
