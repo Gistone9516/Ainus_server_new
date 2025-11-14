@@ -1,0 +1,180 @@
+### Ainus API 테스트 케이스
+
+@baseUrl = http://localhost:3000
+@accessToken = YOUR_ACCESS_TOKEN_HERE
+
+### ============================================
+### 헬스 체크
+### ============================================
+
+### 헬스 체크
+GET {{baseUrl}}/health
+
+### API 버전 정보
+GET {{baseUrl}}/api/version
+
+### ============================================
+### 인증 (Authentication)
+### ============================================
+
+### 회원가입
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test1234!@",
+  "nickname": "테스트유저",
+  "terms_agreed": true,
+  "privacy_agreed": true,
+  "marketing_agreed": false
+}
+
+### 이메일 중복 확인
+GET {{baseUrl}}/api/v1/auth/check-email?email=test@example.com
+
+### 로그인
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test1234!@",
+  "device_type": "web"
+}
+
+### 현재 사용자 정보 조회 (인증 필요)
+GET {{baseUrl}}/api/v1/auth/me
+Authorization: Bearer {{accessToken}}
+
+### 토큰 갱신
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "YOUR_REFRESH_TOKEN"
+}
+
+### 로그아웃 (인증 필요)
+POST {{baseUrl}}/api/v1/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "refresh_token": "YOUR_REFRESH_TOKEN"
+}
+
+### ============================================
+### 이슈 지수 (Issue Index) - 기능 #7
+### ============================================
+
+### 이슈 지수 근거 데이터 조회 (기본 - 상위 3개)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (limit 지정)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?limit=5
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (페이지네이션)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?limit=3&offset=3
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (카테고리 필터 - tech)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?category=tech
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (카테고리 필터 - policy)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?category=policy
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (정렬 기준 - 발행일)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?sort_by=published_date
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 (모든 파라미터 조합)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?limit=5&offset=0&category=tech&sort_by=impact
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 - 유효하지 않은 날짜 (400 에러)
+GET {{baseUrl}}/api/v1/issue-index/invalid-date/sources
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 - limit 범위 초과 (400 에러)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources?limit=15
+Authorization: Bearer {{accessToken}}
+
+### 이슈 지수 근거 데이터 조회 - 인증 없음 (401 에러)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/sources
+
+### 뉴스 기사 추가 조회 (기본 - 10개)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/articles
+Authorization: Bearer {{accessToken}}
+
+### 뉴스 기사 추가 조회 (페이지네이션)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/articles?limit=10&offset=10
+Authorization: Bearer {{accessToken}}
+
+### 뉴스 기사 추가 조회 (최소 영향도 필터)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/articles?min_impact_score=70
+Authorization: Bearer {{accessToken}}
+
+### 뉴스 기사 추가 조회 (모든 파라미터 조합)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/articles?limit=15&offset=0&min_impact_score=60
+Authorization: Bearer {{accessToken}}
+
+### 뉴스 기사 추가 조회 - limit 범위 초과 (400 에러)
+GET {{baseUrl}}/api/v1/issue-index/2025-01-15/articles?limit=25
+Authorization: Bearer {{accessToken}}
+
+### ============================================
+### OAuth 2.0 소셜 로그인
+### ============================================
+
+### Google OAuth 시작
+GET {{baseUrl}}/api/v1/auth/google
+
+### Kakao OAuth 시작
+GET {{baseUrl}}/api/v1/auth/kakao
+
+### Naver OAuth 시작
+GET {{baseUrl}}/api/v1/auth/naver
+
+### ============================================
+### 비밀번호 관리
+### ============================================
+
+### 비밀번호 재설정 요청
+POST {{baseUrl}}/api/v1/auth/forgot-password
+Content-Type: application/json
+
+{
+  "email": "test@example.com"
+}
+
+### 비밀번호 재설정
+POST {{baseUrl}}/api/v1/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "RESET_TOKEN_HERE",
+  "password": "NewPassword1234!@"
+}
+
+### 비밀번호 변경 (인증 필요)
+POST {{baseUrl}}/api/v1/auth/change-password
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "current_password": "Test1234!@",
+  "new_password": "NewPassword1234!@"
+}
+
+### 이메일 인증
+POST {{baseUrl}}/api/v1/auth/verify-email
+Content-Type: application/json
+
+{
+  "token": "EMAIL_VERIFICATION_TOKEN_HERE"
+}

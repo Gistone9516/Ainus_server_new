@@ -42,6 +42,8 @@ export async function runMigrations(): Promise<void> {
     // 5. 뉴스 및 분류 테이블
     await createNewsArticlesTable();
     await createArticleToTagsTable();
+    await createIssueIndexSourcesTable(); // #7: 이슈 지수 근거 뉴스
+    await createNewsTagsTable(); // #7: 뉴스 태그
 
     // 6. 커뮤니티 테이블
     await createCommunityPostsTable();
@@ -72,14 +74,20 @@ async function createUsersTable(): Promise<void> {
     CREATE TABLE IF NOT EXISTS users (
       user_id INT PRIMARY KEY AUTO_INCREMENT,
       email VARCHAR(255) UNIQUE NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255),
       nickname VARCHAR(50) UNIQUE NOT NULL,
+      auth_provider VARCHAR(50) DEFAULT 'local' COMMENT 'local, google, kakao, naver',
       job_category_id INT,
       profile_image_url VARCHAR(500),
+      marketing_agreed BOOLEAN DEFAULT FALSE,
+      terms_agreed BOOLEAN DEFAULT TRUE,
+      privacy_agreed BOOLEAN DEFAULT TRUE,
+      is_active BOOLEAN DEFAULT TRUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (job_category_id) REFERENCES job_categories(job_category_id),
       INDEX idx_email (email),
+      INDEX idx_auth_provider (auth_provider),
       INDEX idx_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `;
@@ -596,4 +604,60 @@ async function createLoginAuditLogsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "login_audit_logs" created');
+}
+
+/**
+ * TASK-7: issue_index_sources 테이블 (이슈 지수 근거 뉴스)
+ * 각 이슈 지수를 구성하는 핵심 뉴스 연결
+ */
+async function createIssueIndexSourcesTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS issue_index_sources (
+      id BIGINT PRIMARY KEY AUTO_INCREMENT,
+      date DATE NOT NULL COMMENT '이슈 지수 날짜',
+      issue_index_id INT NOT NULL COMMENT 'issue_index_daily FK',
+      news_id INT NOT NULL COMMENT '뉴스 기사 ID (news_articles FK)',
+      \`rank\` INT NOT NULL DEFAULT 1 COMMENT '근거 순위 (1,2,3...)',
+      impact_score DECIMAL(5, 2) NOT NULL COMMENT '해당 뉴스의 영향도 점수 (0-100)',
+      contribution_weight DECIMAL(3, 2) DEFAULT 1.0 COMMENT '지수에 대한 기여도 (0-1)',
+      inclusion_reason VARCHAR(255) COMMENT '포함 사유 (e.g., "top_impact", "policy_change")',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (issue_index_id) REFERENCES issue_index_daily(index_id) ON DELETE CASCADE,
+      FOREIGN KEY (news_id) REFERENCES news_articles(article_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_date_news (date, news_id),
+      INDEX idx_date (date),
+      INDEX idx_news (news_id),
+      INDEX idx_rank (\`rank\` ASC),
+      INDEX idx_impact_score (impact_score DESC)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='이슈 지수의 근거가 되는 뉴스 (#7 사용)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "issue_index_sources" created');
+}
+
+/**
+ * TASK-7: news_tags 테이블 (뉴스 태그)
+ * 뉴스 기사에 부여된 관심사 태그 (40개 표준)
+ */
+async function createNewsTagsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS news_tags (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      news_id INT NOT NULL COMMENT '뉴스 기사 FK',
+      tag_id INT NOT NULL COMMENT '관심사 태그 ID (40개 중)',
+      tag_name VARCHAR(100) COMMENT '태그명 (e.g., "LLM", "규제")',
+      confidence DECIMAL(3, 2) COMMENT '태그 부여 신뢰도 (0-1)',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (news_id) REFERENCES news_articles(article_id) ON DELETE CASCADE,
+      FOREIGN KEY (tag_id) REFERENCES interest_tags(interest_tag_id),
+      UNIQUE KEY uk_news_tag (news_id, tag_id),
+      INDEX idx_tag (tag_id),
+      INDEX idx_news (news_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='뉴스에 부여된 40개 표준 태그 (#5, #7, #8, #9 사용)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "news_tags" created');
 }

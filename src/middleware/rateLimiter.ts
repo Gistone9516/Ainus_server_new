@@ -11,6 +11,20 @@ import { Request, Response } from 'express';
 // import RedisStore from 'rate-limit-redis';
 
 /**
+ * IP 주소 추출 헬퍼 함수 (IPv6 호환)
+ */
+function getClientIp(req: Request): string {
+  // x-forwarded-for 헤더에서 첫 번째 IP 추출
+  const forwarded = req.get('x-forwarded-for');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+
+  // req.ip 또는 req.socket.remoteAddress 사용
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+/**
  * 로그인 실패 Rate Limiter
  * 15분 내 5회 제한 → 423 (RATE_LIMIT_EXCEEDED)
  * 참고: 프로덕션에서는 rate-limit-redis를 사용하여 분산 환경 지원
@@ -22,9 +36,8 @@ export function createLoginRateLimiter(): RateLimitRequestHandler {
     message: '로그인 시도 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {
-      // IP 주소 기반 제한
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      // IP 주소 기반 제한 (IPv6 호환)
+      const ip = getClientIp(req);
       return `${ip}:login`;
     },
     skip: (req: Request) => {
@@ -60,8 +73,7 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
     message: '회원가입 시도 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      const ip = getClientIp(req);
       return `${ip}:register`;
     },
     skip: (req: Request) => {
@@ -96,8 +108,7 @@ export function createGlobalRateLimiter(): RateLimitRequestHandler {
     message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      const ip = getClientIp(req);
       return ip;
     },
     skip: (req: Request) => {
@@ -110,6 +121,41 @@ export function createGlobalRateLimiter(): RateLimitRequestHandler {
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
           message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+}
+
+/**
+ * 이슈 지수 조회 Rate Limiter (TASK-7)
+ * 1분 내 60회 제한
+ */
+export function createIssueIndexRateLimiter(): RateLimitRequestHandler {
+  return rateLimit({
+    windowMs: 1 * 60 * 1000, // 1분
+    max: 60, // 최대 60회
+    message: '이슈 지수 조회 횟수를 초과했습니다. 나중에 다시 시도해주세요',
+    statusCode: 429,
+    keyGenerator: (req: Request) => {
+      const ip = getClientIp(req);
+      return `${ip}:issue-index`;
+    },
+    skip: (req: Request) => {
+      return req.method === 'OPTIONS';
+    },
+    handler: (req: Request, res: Response) => {
+      const resetTime = req.rateLimit?.resetTime as number | undefined;
+      const retryAfter = resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : 60;
+      res.status(429).json({
+        success: false,
+        error: {
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: '이슈 지수 조회 횟수를 초과했습니다. 나중에 다시 시도해주세요',
+          details: {
+            retry_after: Math.max(0, retryAfter)
+          }
         },
         timestamp: new Date().toISOString()
       });

@@ -15,6 +15,7 @@ class RedisCache {
 
   /**
    * Redis 연결 초기화
+   * 연결 실패 시 경고만 출력하고 계속 진행 (선택적 캐싱)
    */
   async initialize(): Promise<void> {
     const methodName = 'initialize';
@@ -32,29 +33,48 @@ class RedisCache {
         port: config.redis.port,
         password: config.redis.password,
         db: config.redis.db,
-        retryStrategy: (times) => Math.min(times * 50, 2000),
-        maxRetriesPerRequest: 3
+        retryStrategy: (times) => {
+          // 3회 재시도 후 포기
+          if (times > 3) {
+            return null;
+          }
+          return Math.min(times * 50, 2000);
+        },
+        maxRetriesPerRequest: 3,
+        lazyConnect: true // 지연 연결
       });
 
-      // 연결 테스트
+      // 연결 테스트 (타임아웃 5초)
+      await Promise.race([
+        this.redis.connect(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 5000))
+      ]);
+
       await this.redis.ping();
 
       this.isInitialized = true;
       logger.info(`Redis connected: ${config.redis.host}:${config.redis.port}`);
     } catch (error) {
-      logger.error('Redis initialization failed', error);
-      throw new Error(`Redis 연결 실패: ${error}`);
+      logger.warn('Redis initialization failed - continuing without cache', error);
+      // Redis 연결 실패해도 계속 진행 (캐싱 없이 작동)
+      this.redis = null;
+      this.isInitialized = false;
     }
   }
 
   /**
    * Redis 인스턴스 획득
+   * Redis가 초기화되지 않았으면 null 반환 (캐싱 비활성화)
    */
-  private getRedis(): Redis {
-    if (!this.redis) {
-      throw new Error('Redis not initialized');
-    }
+  private getRedis(): Redis | null {
     return this.redis;
+  }
+
+  /**
+   * Redis 사용 가능 여부 확인
+   */
+  isAvailable(): boolean {
+    return this.redis !== null && this.isInitialized;
   }
 
   /**
@@ -63,6 +83,9 @@ class RedisCache {
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return; // Redis 비활성화 시 무시
+      }
       if (ttlSeconds) {
         await redis.setex(key, ttlSeconds, value);
       } else {
@@ -79,6 +102,9 @@ class RedisCache {
   async get(key: string): Promise<string | null> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return null; // Redis 비활성화 시 null 반환
+      }
       return await redis.get(key);
     } catch (error) {
       logger.warn(`Redis GET failed for key ${key}:`, error);
@@ -116,6 +142,9 @@ class RedisCache {
   async delete(key: string): Promise<boolean> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return false;
+      }
       const result = await redis.del(key);
       return result > 0;
     } catch (error) {
@@ -131,6 +160,9 @@ class RedisCache {
     try {
       if (keys.length === 0) return 0;
       const redis = this.getRedis();
+      if (!redis) {
+        return 0;
+      }
       return await redis.del(...keys);
     } catch (error) {
       logger.warn(`Redis DELETEMANY failed:`, error);
@@ -144,6 +176,9 @@ class RedisCache {
   async exists(key: string): Promise<boolean> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return false;
+      }
       const result = await redis.exists(key);
       return result > 0;
     } catch (error) {
@@ -158,6 +193,9 @@ class RedisCache {
   async setTTL(key: string, ttlSeconds: number): Promise<void> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return;
+      }
       await redis.expire(key, ttlSeconds);
     } catch (error) {
       logger.warn(`Redis EXPIRE failed for key ${key}:`, error);
@@ -170,6 +208,9 @@ class RedisCache {
   async hSet(key: string, field: string, value: string): Promise<void> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return;
+      }
       await redis.hset(key, field, value);
     } catch (error) {
       logger.warn(`Redis HSET failed for key ${key}:`, error);
@@ -182,6 +223,9 @@ class RedisCache {
   async hGet(key: string, field: string): Promise<string | null> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return null;
+      }
       return await redis.hget(key, field);
     } catch (error) {
       logger.warn(`Redis HGET failed for key ${key}:`, error);
@@ -195,6 +239,9 @@ class RedisCache {
   async hGetAll(key: string): Promise<Record<string, string>> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return {};
+      }
       return await redis.hgetall(key);
     } catch (error) {
       logger.warn(`Redis HGETALL failed for key ${key}:`, error);
@@ -208,6 +255,9 @@ class RedisCache {
   async lPush(key: string, values: string[], ttlSeconds?: number): Promise<void> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return;
+      }
       if (values.length > 0) {
         await redis.lpush(key, ...values);
         if (ttlSeconds) {
@@ -225,6 +275,9 @@ class RedisCache {
   async lRange(key: string, start: number = 0, stop: number = -1): Promise<string[]> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return [];
+      }
       return await redis.lrange(key, start, stop);
     } catch (error) {
       logger.warn(`Redis LRANGE failed for key ${key}:`, error);
@@ -238,6 +291,9 @@ class RedisCache {
   async keys(pattern: string): Promise<string[]> {
     try {
       const redis = this.getRedis();
+      if (!redis) {
+        return [];
+      }
       return await redis.keys(pattern);
     } catch (error) {
       logger.warn(`Redis KEYS failed for pattern ${pattern}:`, error);
@@ -264,7 +320,7 @@ class RedisCache {
   /**
    * Redis 클라이언트 직접 접근 (Rate Limiting 등에서 사용)
    */
-  getClient(): Redis {
+  getClient(): Redis | null {
     return this.getRedis();
   }
 }

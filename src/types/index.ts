@@ -78,3 +78,79 @@ export interface MethodResult<T = any> {
     error: string;
   }>;
 }
+
+/**
+ * 이슈 지수 정보 (기능 #7)
+ */
+export interface IssueIndexInfo {
+  value: number;
+  previous_value?: number;
+  change_percentage?: number;
+  change_direction?: 'up' | 'down' | 'same';
+}
+
+/**
+ * 이슈 지수 근거 뉴스 소스 (기능 #7)
+ */
+export interface IssueIndexSource {
+  source_id: number;
+  news_id: number;
+  rank: number;
+  title: string;
+  summary?: string;
+  source: string;
+  source_url: string;
+  published_at: string;
+  impact_score: number;
+  category?: string;
+  tags?: string[];
+  content_snippet?: string;
+  image_url?: string;
+}
+
+/**
+ * 이슈 지수 근거 데이터 조회 응답 (기능 #7)
+ */
+export interface IssueIndexSourcesResponse {
+  date: string;
+  issue_index: IssueIndexInfo;
+  sources: IssueIndexSource[];
+  total_count: number;
+  timestamp: string;
+}
+
+/**
+ * 이슈 지수 근거 데이터 조회 파라미터 (기능 #7)
+ */
+export interface GetIssueIndexSourcesParams {
+  date: string; // YYYY-MM-DD
+  limit?: number; // 1-10, 기본값 3
+  offset?: number; // 기본값 0
+  category?: 'all' | 'tech' | 'policy' | 'market'; // 기본값 'all'
+  sort_by?: 'impact' | 'published_date'; // 기본값 'impact'
+}
+
+/**
+ * 뉴스 기사 추가 조회 응답 (기능 #7)
+ */
+export interface NewsArticle {
+  news_id: number;
+  title: string;
+  summary?: string;
+  source: string;
+  source_url: string;
+  published_at: string;
+  impact_score: number;
+  category?: string;
+  tags?: string[];
+}
+
+/**
+ * 뉴스 기사 추가 조회 응답 (기능 #7)
+ */
+export interface NewsArticlesResponse {
+  date: string;
+  articles: NewsArticle[];
+  total_count: number;
+  has_more: boolean;
+}
