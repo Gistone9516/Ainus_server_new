@@ -8,6 +8,7 @@ import authRouter from './routes/auth';
 import communityRouter from './routes/community';
 import modelsRouter from './routes/models';
 import issueIndexRouter from './routes/issueIndex';
+import trendMonitoringRouter from './routes/trendMonitoring';
 
 const logger = new Logger('App');
 
@@ -57,6 +58,9 @@ export function createApp(): Express {
   app.use('/api/v1/slm', modelsRouter);
   app.use('/api/v1/community', communityRouter);
   app.use('/api/v1/issue-index', issueIndexRouter);
+  app.use('/api/v1/jobs', trendMonitoringRouter);
+  app.use('/api/v1/users/profile', trendMonitoringRouter);
+  app.use('/api/v1/news', trendMonitoringRouter);
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({
