@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import { getConfig } from './config/environment';
 import { errorHandler, asyncHandler } from './middleware/errorHandler';
 import { createGlobalRateLimiter } from './middleware/rateLimiter';
@@ -16,6 +17,17 @@ const logger = new Logger('App');
 export function createApp(): Express {
   const app = express();
   const config = getConfig();
+
+  // CORS 설정 - React Native 앱 지원
+  app.use(cors({
+    origin: config.nodeEnv === 'production'
+      ? ['https://your-production-domain.com'] // 프로덕션 도메인으로 변경
+      : true, // 개발 환경에서는 모든 origin 허용
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Workflow-ID'],
+    exposedHeaders: ['X-Workflow-ID']
+  }));
 
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
