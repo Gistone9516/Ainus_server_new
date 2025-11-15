@@ -1,24 +1,44 @@
 /**
- * 모델 추천 API 라우터
- * 기능 #4: 사용자 입력 기반 AI 모델 추천
+ * 모델 관련 API 라우터 (통합)
+ * - 기능 #4: 사용자 입력 기반 AI 모델 추천
+ * - 기능 #5/#6: 이슈 인덱스 및 모델 업데이트 추적
  *
  * 엔드포인트:
+ * [모델 추천]
  * - POST /api/v1/models/recommend-by-input (통합 SLM 분류 + 추천)
  * - POST /api/v1/models/recommend-by-category (카테고리 기반 추천)
  * - POST /api/v1/slm/classify (SLM 분류)
  * - GET /api/v1/categories (카테고리 조회)
+ *
+ * [이슈 인덱스 & 모델 업데이트]
+ * - GET /api/v1/models/issue-index/latest
+ * - GET /api/v1/models/issue-index/recent
+ * - GET /api/v1/models/issue-index/by-category
+ * - GET /api/v1/models/updates/recent
+ * - GET /api/v1/models/:modelId/updates
+ * - GET /api/v1/models/:modelId/updates/:updateId
+ * - POST /api/v1/models/:modelId/interest
+ * - DELETE /api/v1/models/:modelId/interest
  */
 
 import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../middleware/errorHandler';
+import { requireAuth } from '../middleware/auth';
 import { createGlobalRateLimiter } from '../middleware/rateLimiter';
 import { Logger } from '../database/logger';
+
+// 모델 추천 관련 서비스
 import {
   recommendModelsByInput,
   recommendModelsByCategory,
   getAllCategoriesList
 } from '../services/ModelRecommendationService';
 import { classifyWithAlternatives } from '../services/SlmClassificationService';
+
+// 이슈 인덱스 & 모델 업데이트 관련 서비스
+import * as ModelUpdateService from '../services/ModelUpdateService';
+import * as IssueIndexService from '../services/IssueIndexService';
+
 import { ApiResponse, RecommendByInputRequest, RecommendByCategoryRequest, SlmClassifyRequest } from '../types';
 import { AgentException, ValidationException } from '../exceptions';
 
@@ -32,30 +52,17 @@ const recommendRateLimiter = createGlobalRateLimiter({
   message: '요청 횟수를 초과했습니다 (ERROR_4001)'
 });
 
-router.use(recommendRateLimiter);
+/**
+ * ========================================
+ * 모델 추천 API (기능 #4)
+ * ========================================
+ */
 
 /**
  * POST /api/v1/models/recommend-by-input
  * 통합 SLM 분류 + 모델 추천
- *
- * 요청:
- * {
- *   "user_input": "블로그 글을 SEO 최적화해서 써줄 수 있어?",
- *   "user_id": "123" (선택사항),
- *   "limit": 5 (선택사항, 기본값: 5, 범위: 1-10)
- * }
- *
- * 응답:
- * {
- *   "success": true,
- *   "data": {
- *     "classification": { ... },
- *     "recommended_models": [ ... ]
- *   },
- *   "timestamp": "2025-11-11T10:30:00Z"
- * }
  */
-router.post('/recommend-by-input', asyncHandler(async (req: Request, res: Response) => {
+router.post('/recommend-by-input', recommendRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const methodName = 'POST /models/recommend-by-input';
   const workflowId = (req as any).workflowId;
 
@@ -72,7 +79,6 @@ router.post('/recommend-by-input', asyncHandler(async (req: Request, res: Respon
       inputLength: request.user_input?.length || 0
     });
 
-    // 서비스 호출
     const result = await recommendModelsByInput(request);
 
     logger.info(`${methodName} 성공`, {
@@ -113,7 +119,6 @@ router.post('/recommend-by-input', asyncHandler(async (req: Request, res: Respon
       } as ApiResponse);
     }
 
-    // 예상 외 에러
     logger.error(`${methodName} 예상 외 에러`, {
       workflowId,
       error: error instanceof Error ? error.message : String(error)
@@ -134,24 +139,8 @@ router.post('/recommend-by-input', asyncHandler(async (req: Request, res: Respon
 /**
  * POST /api/v1/models/recommend-by-category
  * 카테고리 기반 모델 추천
- *
- * 요청:
- * {
- *   "category_id": 1,
- *   "user_id": "123" (선택사항),
- *   "limit": 5 (선택사항)
- * }
- *
- * 응답:
- * {
- *   "success": true,
- *   "data": {
- *     "category": { ... },
- *     "recommended_models": [ ... ]
- *   }
- * }
  */
-router.post('/recommend-by-category', asyncHandler(async (req: Request, res: Response) => {
+router.post('/recommend-by-category', recommendRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const methodName = 'POST /models/recommend-by-category';
   const workflowId = (req as any).workflowId;
 
@@ -218,23 +207,8 @@ router.post('/recommend-by-category', asyncHandler(async (req: Request, res: Res
 /**
  * POST /api/v1/slm/classify
  * SLM 분류 (저신뢰도 시 대체 옵션 제시)
- *
- * 요청:
- * {
- *   "user_input": "오늘 뭐 만들어 먹고 싶은데",
- *   "top_k": 3 (선택사항, 기본값: 3, 최대: 5)
- * }
- *
- * 응답:
- * {
- *   "success": true,
- *   "data": {
- *     "primary": { ... },
- *     "alternatives": [ ... ]
- *   }
- * }
  */
-router.post('/slm/classify', asyncHandler(async (req: Request, res: Response) => {
+router.post('/slm/classify', recommendRateLimiter, asyncHandler(async (req: Request, res: Response) => {
   const methodName = 'POST /slm/classify';
   const workflowId = (req as any).workflowId;
 
@@ -305,15 +279,6 @@ router.post('/slm/classify', asyncHandler(async (req: Request, res: Response) =>
 /**
  * GET /api/v1/categories
  * 모든 카테고리 조회
- *
- * 응답:
- * {
- *   "success": true,
- *   "data": {
- *     "categories": [ ... ],
- *     "total": 25
- *   }
- * }
  */
 router.get('/categories', asyncHandler(async (req: Request, res: Response) => {
   const methodName = 'GET /categories';
@@ -369,6 +334,114 @@ router.get('/categories', asyncHandler(async (req: Request, res: Response) => {
       workflow_id: workflowId
     } as ApiResponse);
   }
+}));
+
+/**
+ * ========================================
+ * 이슈 인덱스 & 모델 업데이트 API (기능 #5/#6)
+ * ========================================
+ */
+
+/**
+ * GET /api/v1/models/issue-index/latest
+ * 최신 이슈 인덱스 조회
+ */
+router.get('/issue-index/latest', asyncHandler(async (req: Request, res: Response) => {
+  const result = await IssueIndexService.getLatestIssueIndex();
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * GET /api/v1/models/issue-index/recent
+ * 최근 이슈 인덱스 트렌드
+ */
+router.get('/issue-index/recent', asyncHandler(async (req: Request, res: Response) => {
+  const days = parseInt(req.query.days as string) || 30;
+  const result = await IssueIndexService.getRecentIndexTrend(days);
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * GET /api/v1/models/issue-index/by-category
+ * 카테고리별 최신 이슈 인덱스
+ */
+router.get('/issue-index/by-category', asyncHandler(async (req: Request, res: Response) => {
+  const result = await IssueIndexService.getLatestIndexByCategory();
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * GET /api/v1/models/updates/recent
+ * 최근 모델 업데이트 목록
+ */
+router.get('/updates/recent', asyncHandler(async (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
+  const offset = (page - 1) * limit;
+
+  const result = await ModelUpdateService.getRecentUpdates(limit, offset);
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * GET /api/v1/models/:modelId/updates
+ * 특정 모델의 업데이트 이력
+ */
+router.get('/:modelId/updates', asyncHandler(async (req: Request, res: Response) => {
+  const modelId = parseInt(req.params.modelId);
+  if (isNaN(modelId)) {
+    throw new ValidationException('유효하지 않은 모델 ID입니다.', 'getModelUpdates');
+  }
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 10;
+  const offset = (page - 1) * limit;
+
+  const result = await ModelUpdateService.getUpdatesByModelId(modelId, limit, offset);
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * GET /api/v1/models/:modelId/updates/:updateId
+ * 특정 업데이트 상세 정보
+ */
+router.get('/:modelId/updates/:updateId', asyncHandler(async (req: Request, res: Response) => {
+  const updateId = parseInt(req.params.updateId);
+  if (isNaN(updateId)) {
+    throw new ValidationException('유효하지 않은 업데이트 ID입니다.', 'getUpdateDetails');
+  }
+
+  const result = await ModelUpdateService.getUpdateDetails(updateId);
+  res.status(200).json({ success: true, data: result });
+}));
+
+/**
+ * POST /api/v1/models/:modelId/interest
+ * 관심 모델 추가
+ */
+router.post('/:modelId/interest', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const modelId = parseInt(req.params.modelId);
+  if (isNaN(modelId)) {
+    throw new ValidationException('유효하지 않은 모델 ID입니다.', 'addInterest');
+  }
+
+  const result = await ModelUpdateService.addInterestedModel(userId, modelId);
+  res.status(201).json({ success: true, data: result });
+}));
+
+/**
+ * DELETE /api/v1/models/:modelId/interest
+ * 관심 모델 제거
+ */
+router.delete('/:modelId/interest', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).userId;
+  const modelId = parseInt(req.params.modelId);
+  if (isNaN(modelId)) {
+    throw new ValidationException('유효하지 않은 모델 ID입니다.', 'removeInterest');
+  }
+
+  const result = await ModelUpdateService.removeInterestedModel(userId, modelId);
+  res.status(200).json({ success: true, data: result });
 }));
 
 /**
