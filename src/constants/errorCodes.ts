@@ -187,6 +187,71 @@ export const ERROR_CODES: Record<string, ErrorCodeDefinition> = {
     description: 'Social account already linked'
   },
 
+  // ===== 6000번대: 모델 추천 (기능 #4) =====
+  '6001': {
+    code: '6001',
+    message: '입력 텍스트가 너무 짧습니다 (최소 10자)',
+    httpStatus: 400,
+    category: '모델 추천',
+    description: 'Input text is too short (minimum 10 characters)'
+  },
+  '6002': {
+    code: '6002',
+    message: '입력 텍스트가 너무 깁니다 (최대 150자)',
+    httpStatus: 400,
+    category: '모델 추천',
+    description: 'Input text is too long (maximum 150 characters)'
+  },
+  '6003': {
+    code: '6003',
+    message: '유효하지 않은 문자가 포함되어 있습니다',
+    httpStatus: 400,
+    category: '모델 추천',
+    description: 'Input contains invalid characters'
+  },
+  '6004': {
+    code: '6004',
+    message: 'SLM 분류 중 오류가 발생했습니다',
+    httpStatus: 503,
+    category: '모델 추천',
+    description: 'SLM classification error'
+  },
+  '6005': {
+    code: '6005',
+    message: '유효하지 않은 카테고리 ID입니다',
+    httpStatus: 400,
+    category: '모델 추천',
+    description: 'Invalid category ID (must be between 1 and 25)'
+  },
+  '6006': {
+    code: '6006',
+    message: '모델 데이터를 조회하는 중 오류가 발생했습니다',
+    httpStatus: 500,
+    category: '모델 추천',
+    description: 'Failed to retrieve model data'
+  },
+  '6007': {
+    code: '6007',
+    message: '이 카테고리의 모델 정보가 아직 준비 중입니다',
+    httpStatus: 404,
+    category: '모델 추천',
+    description: 'No models found for this category'
+  },
+  '6008': {
+    code: '6008',
+    message: '유효하지 않은 limit 값입니다 (1~10)',
+    httpStatus: 400,
+    category: '모델 추천',
+    description: 'Invalid limit value (must be between 1 and 10)'
+  },
+  '6009': {
+    code: '6009',
+    message: 'SLM 신뢰도가 낮아 대체 옵션을 제시합니다',
+    httpStatus: 200,
+    category: '모델 추천',
+    description: 'SLM confidence is low, showing alternatives'
+  },
+
   // ===== 9000번대: 서버 에러 =====
   '9001': {
     code: '9001',
