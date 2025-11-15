@@ -129,12 +129,7 @@ export function createGlobalRateLimiter(options?: {
     message,
     statusCode: 429,
     keyGenerator: (req: Request) => {
-<<<<<<< HEAD
       return getClientIp(req);
-=======
-      const ip = getClientIp(req);
-      return ip;
->>>>>>> origin/feature/#7
     },
     skip: (req: Request) => {
       // 헬스 체크는 제한하지 않음
