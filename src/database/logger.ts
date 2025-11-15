@@ -3,7 +3,7 @@
  * Winston을 사용할 수도 있지만, 기본 구현으로 시작
  */
 
-import { getConfig } from '@config/environment';
+import { getConfig } from '../config/environment';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 

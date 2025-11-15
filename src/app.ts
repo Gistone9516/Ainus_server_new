@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import authRouter from './routes/auth';
 import communityRouter from './routes/community';
 import modelsRouter from './routes/models';
+import issueIndexRouter from './routes/issueIndex';
 
 const logger = new Logger('App');
 
@@ -55,6 +56,7 @@ export function createApp(): Express {
   app.use('/api/v1/models', modelsRouter);
   app.use('/api/v1/slm', modelsRouter);
   app.use('/api/v1/community', communityRouter);
+  app.use('/api/v1/issue-index', issueIndexRouter);
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({

@@ -18,7 +18,7 @@ import {
 } from '../services/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
-import { createLoginRateLimiter, createRegisterRateLimiter, createGlobalRateLimiter } from '../middleware/rateLimiter';
+import { createLoginRateLimiter, createRegisterRateLimiter } from '../middleware/rateLimiter';
 import { getConfig } from '../config/environment';
 import {
   generateGoogleOAuthState,
