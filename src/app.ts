@@ -9,6 +9,7 @@ import communityRouter from './routes/community';
 import modelsRouter from './routes/models';
 import issueIndexRouter from './routes/issueIndex';
 import trendMonitoringRouter from './routes/trendMonitoring';
+import newsRouter from './routes/news';
 
 const logger = new Logger('App');
 
@@ -60,7 +61,7 @@ export function createApp(): Express {
   app.use('/api/v1/issue-index', issueIndexRouter);
   app.use('/api/v1/jobs', trendMonitoringRouter);
   app.use('/api/v1/users/profile', trendMonitoringRouter);
-  app.use('/api/v1/news', trendMonitoringRouter);
+  app.use('/api/v1/news', newsRouter);
 
   app.use((req: Request, res: Response) => {
     res.status(404).json({
