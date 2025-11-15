@@ -94,3 +94,12 @@ export function getTimeRemaining(expiryDate: Date): number {
   const remaining = (expiryDate.getTime() - now.getTime()) / 1000;
   return Math.max(0, Math.floor(remaining));
 }
+
+/**
+ * 고유 ID 생성 (16자)
+ * 분류 ID, 배치 ID 등에 사용
+ * @returns 고유 ID
+ */
+export function generateId(): string {
+  return crypto.randomBytes(8).toString('hex');
+}

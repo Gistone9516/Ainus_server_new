@@ -42,6 +42,8 @@ export async function runMigrations(): Promise<void> {
     // 5. 뉴스 및 분류 테이블
     await createNewsArticlesTable();
     await createArticleToTagsTable();
+    await createNewsClassificationsTable();
+    await createManualReviewQueueTable();
 
     // 6. 커뮤니티 테이블
     await createCommunityPostsTable();
@@ -596,4 +598,76 @@ async function createLoginAuditLogsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "login_audit_logs" created');
+}
+
+/**
+ * Feature #9: news_classifications 테이블 (뉴스 분류 결과 기록)
+ */
+async function createNewsClassificationsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS news_classifications (
+      classification_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+      article_id INT NOT NULL COMMENT 'news_articles FK',
+      batch_id VARCHAR(100) COMMENT '배치 작업 ID',
+
+      input_title VARCHAR(500) NOT NULL COMMENT '입력된 제목',
+      model_version VARCHAR(50) COMMENT 'SLM 모델 버전',
+
+      status ENUM('pending_review', 'confirmed', 'rejected') DEFAULT 'pending_review' COMMENT '검토 상태',
+
+      processing_time_ms INT COMMENT '모델 처리 시간(ms)',
+
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      confirmed_at DATETIME COMMENT '확정 시각',
+      confirmed_by VARCHAR(100) COMMENT '확정자 ID',
+
+      FOREIGN KEY (article_id) REFERENCES news_articles(article_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_article (article_id),
+      INDEX idx_status (status),
+      INDEX idx_created (created_at DESC),
+      INDEX idx_batch (batch_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='SLM 분류 결과 기록 추적 (#9)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "news_classifications" created');
+}
+
+/**
+ * Feature #9: manual_review_queue 테이블 (수동 검토 대기)
+ */
+async function createManualReviewQueueTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS manual_review_queue (
+      review_id BIGINT PRIMARY KEY AUTO_INCREMENT,
+
+      classification_id BIGINT NOT NULL COMMENT 'news_classifications FK',
+      article_id INT NOT NULL COMMENT 'news_articles FK',
+
+      article_title VARCHAR(500) NOT NULL COMMENT '뉴스 제목',
+      article_source VARCHAR(200) COMMENT '뉴스 출처',
+      published_at DATETIME COMMENT '발행 시각',
+
+      suggested_tags JSON COMMENT '제안된 태그 리스트 (JSON)',
+
+      status ENUM('pending', 'in_review', 'confirmed', 'rejected') DEFAULT 'pending' COMMENT '검토 상태',
+
+      submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '검토 제출 시각',
+      assigned_to VARCHAR(100) COMMENT '담당 검토자 ID',
+      reviewed_at DATETIME COMMENT '검토 완료 시각',
+
+      notes TEXT COMMENT '검토 메모',
+
+      FOREIGN KEY (classification_id) REFERENCES news_classifications(classification_id) ON DELETE CASCADE,
+      FOREIGN KEY (article_id) REFERENCES news_articles(article_id) ON DELETE CASCADE,
+      UNIQUE KEY uk_classification (classification_id),
+      INDEX idx_status (status),
+      INDEX idx_submitted (submitted_at DESC),
+      INDEX idx_assigned (assigned_to)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    COMMENT='신뢰도 70% 미만 수동 검토 대기 큐 (#9)';
+  `;
+  await executeQuery(sql);
+  logger.info('Table "manual_review_queue" created');
 }
