@@ -22,6 +22,7 @@
   "author": "Ainus Dev Team",
   "license": "MIT",
   "dependencies": {
+    "@elastic/elasticsearch": "^8.15.1",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "bull": "^4.11.4",
@@ -31,9 +32,12 @@
     "express-rate-limit": "^8.2.1",
     "ioredis": "^5.3.2",
     "jsonwebtoken": "^9.0.0",
+    "mongodb": "^6.9.0",
+    "module-alias": "^2.2.3",
     "mysql2": "^3.6.2",
     "node-cron": "^3.0.2",
     "nodemailer": "^7.0.10",
+    "openai": "^4.75.0",
     "rate-limit-redis": "^4.2.3",
     "redis": "^4.6.10",
     "typescript": "^5.2.2",
@@ -58,6 +62,18 @@
     "prettier": "^3.0.3",
     "supertest": "^6.3.3",
     "ts-jest": "^29.1.1",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "@types/node-cron": "^3.0.11",
+    "@types/mongodb": "^4.0.7"
+  },
+  "_moduleAliases": {
+    "@": "dist",
+    "@config": "dist/config",
+    "@services": "dist/services",
+    "@routes": "dist/routes",
+    "@middleware": "dist/middleware",
+    "@utils": "dist/utils",
+    "@exceptions": "dist/exceptions",
+    "@types": "dist/types"
   }
 }

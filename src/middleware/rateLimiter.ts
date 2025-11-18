@@ -4,7 +4,10 @@
  * 메모리 저장소 사용 (프로덕션에서는 rate-limit-redis로 변경 권장)
  */
 
-import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
+import rateLimit, {
+  RateLimitRequestHandler,
+  ipKeyGenerator
+} from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 // TODO: 프로덕션 환경에서는 rate-limit-redis를 사용하여 분산 환경 지원
@@ -25,7 +28,7 @@ export function createLoginRateLimiter(): RateLimitRequestHandler {
       // IP 주소 기반 제한
       const forwarded = req.get('x-forwarded-for');
       const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return `${ip}:login`;
+      return `${ipKeyGenerator(ip)}:login`;
     },
     skip: (req: Request) => {
       // OPTIONS 요청은 제한하지 않음
@@ -62,7 +65,7 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
     keyGenerator: (req: Request) => {
       const forwarded = req.get('x-forwarded-for');
       const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return `${ip}:register`;
+      return `${ipKeyGenerator(ip)}:register`;
     },
     skip: (req: Request) => {
       return req.method === 'OPTIONS';
@@ -98,7 +101,7 @@ export function createGlobalRateLimiter(): RateLimitRequestHandler {
     keyGenerator: (req: Request) => {
       const forwarded = req.get('x-forwarded-for');
       const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return ip;
+      return ipKeyGenerator(ip);
     },
     skip: (req: Request) => {
       // 헬스 체크는 제한하지 않음

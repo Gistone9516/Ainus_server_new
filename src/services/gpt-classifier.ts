@@ -11,6 +11,7 @@
  */
 
 import OpenAI from "openai";
+import type { TextContentBlock } from "openai/resources/beta/threads/messages";
 
 // ============ Type 정의 ============
 
@@ -146,14 +147,15 @@ async function callAssistantClassifier(
       throw new Error("No response from Assistant");
     }
 
-    const rawResponse =
-      assistantMessage.content[0].type === "text"
-        ? assistantMessage.content[0].text
-        : "";
+    const textContent = assistantMessage.content.find(
+      (content): content is TextContentBlock => content.type === "text"
+    );
 
-    if (!rawResponse) {
+    if (!textContent) {
       throw new Error("Assistant response is empty");
     }
+
+    const rawResponse = textContent.text.value;
 
     console.log(
       `   ✅ Response extracted (${rawResponse.length} characters)\n`
