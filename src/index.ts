@@ -7,6 +7,7 @@
  * 2. AI 뉴스 클러스터링 & 이슈 지수 시스템
  */
 
+import "module-alias/register";
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import { createApp } from "./app";
