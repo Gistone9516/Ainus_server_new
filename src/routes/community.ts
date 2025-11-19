@@ -157,13 +157,13 @@ router.get('/posts/:postId', optionalAuth, async (req: Request, res: Response) =
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: post,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
-    res.status(error.status || 500).json({
+    return res.status(error.status || 500).json({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',
@@ -272,13 +272,13 @@ router.post(
 
       const result = await communityLikeService.togglePostLike(postId, userId);
 
-      res.json({
+      return res.json({
         success: true,
         data: result,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
-      res.status(error.status || 500).json({
+      return res.status(error.status || 500).json({
         success: false,
         error: {
           code: error.code || 'INTERNAL_SERVER_ERROR',
@@ -322,13 +322,13 @@ router.post(
         parent_comment_id,
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: comment,
         timestamp: new Date().toISOString(),
       });
     } catch (error: any) {
-      res.status(error.status || 500).json({
+      return res.status(error.status || 500).json({
         success: false,
         error: {
           code: error.code || 'INTERNAL_SERVER_ERROR',
@@ -361,13 +361,13 @@ router.get('/posts/:postId/comments', async (req: Request, res: Response) => {
 
     const comments = await communityCommentService.getCommentsByPostId(postId);
 
-    res.json({
+    return res.json({
       success: true,
       data: comments,
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
-    res.status(error.status || 500).json({
+    return res.status(error.status || 500).json({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',
@@ -467,13 +467,13 @@ router.put('/notifications/:notificationId/read', requireAuth, async (req: Reque
 
     await communityNotificationService.markAsRead(notificationId, userId);
 
-    res.json({
+    return res.json({
       success: true,
       data: { message: 'Notification marked as read' },
       timestamp: new Date().toISOString(),
     });
   } catch (error: any) {
-    res.status(error.status || 500).json({
+    return res.status(error.status || 500).json({
       success: false,
       error: {
         code: error.code || 'INTERNAL_SERVER_ERROR',
