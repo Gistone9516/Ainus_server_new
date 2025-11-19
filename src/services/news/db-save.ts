@@ -383,11 +383,35 @@ async function saveClassificationResultToDB(
   }
 }
 
+/**
+ * 특정 시점의 클러스터 스냅샷 조회
+ */
+async function getClusterSnapshots(collectedAt: string): Promise<ClusterSnapshot[]> {
+  const sql = `
+    SELECT * FROM cluster_snapshots
+    WHERE collected_at = ?
+  `;
+  const rows = await executeQuery<any>(sql, [collectedAt]);
+
+  return rows.map((row: any) => ({
+    collected_at: row.collected_at instanceof Date ? row.collected_at.toISOString() : row.collected_at,
+    cluster_id: row.cluster_id,
+    topic_name: row.topic_name,
+    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+    appearance_count: row.appearance_count,
+    article_count: row.article_count,
+    article_indices: typeof row.article_indices === 'string' ? JSON.parse(row.article_indices) : row.article_indices,
+    status: row.status,
+    cluster_score: row.cluster_score
+  }));
+}
+
 // ============ Export ============
 
 export {
   saveClassificationResultToDB,
   calculateClusterScore,
+  getClusterSnapshots,
   ClusterDocument,
   ClusterSnapshot,
   GPTClusterOutput,
