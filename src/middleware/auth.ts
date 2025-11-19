@@ -4,7 +4,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { validateToken } from '../services/AuthService';
+import { validateToken } from '../services/auth/AuthService';
 import { AuthenticationException } from '../exceptions';
 import { JwtPayload } from '../types';
 

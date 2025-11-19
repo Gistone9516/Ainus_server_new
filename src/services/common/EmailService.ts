@@ -5,9 +5,9 @@
  */
 
 import nodemailer, { Transporter } from 'nodemailer';
-import { getConfig } from '../config/environment';
-import { Logger } from '../database/logger';
-import { ExternalAPIException } from '../exceptions';
+import { getConfig } from '../../config/environment';
+import { Logger } from '../../database/logger';
+import { ExternalAPIException } from '../../exceptions';
 import path from 'path';
 import fs from 'fs';
 import ejs from 'ejs';
@@ -89,7 +89,7 @@ export async function renderEmailTemplate(
   try {
     const templatePath = path.join(
       __dirname,
-      `../templates/emails/${templateName}.html`
+      `../../templates/emails/${templateName}.html`
     );
 
     // 파일 존재 확인

@@ -4,16 +4,16 @@
  */
 
 import axios from 'axios';
-import { getConfig } from '../config/environment';
-import { getRedisCache } from '../database/redis';
-import { queryOne, executeModify } from '../database/mysql';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
-import { encrypt, generateRandomToken } from '../utils/encryption';
-import { hashPassword } from '../utils/password';
+import { getConfig } from '../../config/environment';
+import { getRedisCache } from '../../database/redis';
+import { queryOne, executeModify } from '../../database/mysql';
+import { generateAccessToken, generateRefreshToken } from '../../utils/jwt';
+import { encrypt, generateRandomToken } from '../../utils/encryption';
+import { hashPassword } from '../../utils/password';
 import {
   DatabaseException,
   ExternalAPIException
-} from '../exceptions';
+} from '../../exceptions';
 
 const config = getConfig();
 

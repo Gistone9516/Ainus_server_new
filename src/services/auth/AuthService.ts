@@ -4,23 +4,23 @@
  * 예외 처리 가이드를 따릅니다
  */
 
-import { executeQuery, queryOne, executeModify } from '../database/mysql';
-import { getRedisCache } from '../database/redis';
-import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../utils/jwt';
-import { hashPassword, verifyPassword } from '../utils/password';
-import { isStrongPassword } from '../utils/passwordValidator';
+import { executeQuery, queryOne, executeModify } from '../../database/mysql';
+import { getRedisCache } from '../../database/redis';
+import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../../utils/jwt';
+import { hashPassword, verifyPassword } from '../../utils/password';
+import { isStrongPassword } from '../../utils/passwordValidator';
 import {
   ValidationException,
   DatabaseException,
   AuthenticationException
-} from '../exceptions';
+} from '../../exceptions';
 import {
   isAccountLocked,
   incrementLoginFailures,
   resetLoginFailures,
   recordLoginAudit
 } from './LoginAuditService';
-import { User, JwtPayload } from '../types';
+import { User, JwtPayload } from '../../types';
 
 interface RegisterRequest {
   email: string;
@@ -674,7 +674,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
     }
 
     // 2단계: 비밀번호 재설정 토큰 생성
-    const { generatePasswordResetToken, calculateExpiryTime } = await import('../utils/tokenGenerator');
+    const { generatePasswordResetToken, calculateExpiryTime } = await import('../../utils/tokenGenerator');
     const { token, hash } = generatePasswordResetToken();
     const expiryTime = calculateExpiryTime(60); // 1시간 유효
 
@@ -694,7 +694,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
 
     // 4단계: 비밀번호 재설정 이메일 전송
     try {
-      const { sendPasswordResetEmail } = await import('./EmailService');
+      const { sendPasswordResetEmail } = await import('../common/EmailService');
       const resetLink = `http://localhost:3000/auth/reset-password?token=${token}`;
       await sendPasswordResetEmail(user.email, token, resetLink);
     } catch (error) {
@@ -739,7 +739,7 @@ export async function resetPassword(
     }
 
     // 2단계: 토큰 검증
-    const { verifyToken: verifyTokenFunc, hashToken: hashTokenFunc } = await import('../utils/tokenGenerator');
+    const { verifyToken: verifyTokenFunc, hashToken: hashTokenFunc } = await import('../../utils/tokenGenerator');
     const tokenHash = hashTokenFunc(token);
 
     const resetTokenRecord = await queryOne<any>(
@@ -885,7 +885,7 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
     // 2단계: 토큰 검증 (현재는 Redis 또는 DB에서 확인)
     // 실제 구현은 email_verification_tokens 테이블이 필요함
     // 여기서는 간단히 처리
-    const { hashToken: hashTokenFunc } = await import('../utils/tokenGenerator');
+    const { hashToken: hashTokenFunc } = await import('../../utils/tokenGenerator');
     const tokenHash = hashTokenFunc(token);
 
     // 데이터베이스에서 토큰 확인 (email_verification_tokens 테이블 가정)

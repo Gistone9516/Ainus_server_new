@@ -12,8 +12,8 @@ import { Request, Response } from "express";
 import {
   getLatestIssueIndex,
   getIssueIndexByDate,
-} from "../services/save-issue-index";
-import { getSnapshotsCollection } from "../services/db-save";
+} from "../services/news/save-issue-index";
+import { getSnapshotsCollection } from "../services/news/db-save";
 import { getArticlesByIndices } from "../database/elasticsearch";
 
 // ============ Type 정의 ============
