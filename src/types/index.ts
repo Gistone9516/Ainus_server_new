@@ -78,62 +78,134 @@ export interface UserSession {
 }
 
 /**
- * AI 모델
+ * 모델 제공사
  */
-export interface AiModel {
-  model_id: number;
-  model_name: string;
-  series_name?: string;
-  developer?: string;
-  release_date?: string; // DATE type
-  overall_score?: number; // DECIMAL
-  performance_data_ref?: string;
-  created_at: Date;
-  updated_at: Date;
+export interface ModelCreator {
+  creator_id: string; // UUID (VARCHAR(36))
+  creator_name: string;
+  creator_slug: string;
+  website_url?: string;
+  description?: string;
+  country?: string;
+  founded_year?: number; // YEAR
+  is_active?: boolean;
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
 }
 
 /**
- * 모델 벤치마크
+ * AI 모델
  */
-export interface ModelBenchmark {
-  benchmark_id: number;
-  model_id: number;
-  benchmark_name?: string;
-  raw_score?: number;
-  min_val?: number;
-  max_val?: number;
-  normalized_score?: number;
-  collected_at?: Date;
-  created_at: Date;
+export interface AiModel {
+  model_id: string; // UUID (Artificial Analysis API ID, VARCHAR(36))
+  model_name: string;
+  model_slug: string;
+  creator_id: string; // FK to model_creators
+  release_date?: string; // DATE
+  model_type?: string; // LLM, Vision 등
+  parameter_size?: string;
+  context_length?: number; // INT
+  is_open_source?: boolean;
+  is_active?: boolean;
+  raw_data?: any; // JSON
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
+}
+
+/**
+ * 모델 평가 (벤치마크)
+ */
+export interface ModelEvaluation {
+  evaluation_id: number; // BIGINT
+  model_id: string; // FK
+  benchmark_name: string;
+  score?: number; // DECIMAL(10,4)
+  max_score?: number; // DECIMAL(10,4)
+  normalized_score?: number; // DECIMAL(5,2) - 0-100
+  model_rank?: number;
+  measured_at?: string; // DATE
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
+}
+
+/**
+ * 모델 종합 점수
+ */
+export interface ModelOverallScore {
+  score_id: number; // BIGINT
+  model_id: string; // FK
+  overall_score: number; // DECIMAL(5,2) - 0-100
+  intelligence_index?: number; // DECIMAL(5,2)
+  coding_index?: number; // DECIMAL(5,2)
+  math_index?: number; // DECIMAL(5,2)
+  reasoning_index?: number; // DECIMAL(5,2)
+  language_index?: number; // DECIMAL(5,2)
+  calculated_at: Date; // DATETIME NOT NULL
+  version?: number; // 버전 번호
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
+}
+
+/**
+ * 모델 가격 정보
+ */
+export interface ModelPricing {
+  pricing_id: number; // BIGINT
+  model_id: string; // FK
+  price_input_1m?: number; // DECIMAL(10,6) - 100만 토큰당
+  price_output_1m?: number; // DECIMAL(10,6)
+  price_blended_3to1?: number; // DECIMAL(10,6)
+  currency?: string; // default 'USD'
+  effective_date?: string; // DATE
+  is_current?: boolean;
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
+}
+
+/**
+ * 모델 성능 지표
+ */
+export interface ModelPerformance {
+  performance_id: number; // BIGINT
+  model_id: string; // FK
+  median_output_tokens_per_second?: number; // DECIMAL(10,2)
+  median_time_to_first_token?: number; // DECIMAL(10,4)
+  median_time_to_first_answer?: number; // DECIMAL(10,4)
+  latency_p50?: number; // DECIMAL(10,4)
+  latency_p95?: number; // DECIMAL(10,4)
+  latency_p99?: number; // DECIMAL(10,4)
+  measured_at?: Date; // DATETIME
+  created_at: Date; // DATETIME
+  updated_at: Date; // DATETIME
 }
 
 /**
  * 모델 업데이트
  */
 export interface ModelUpdate {
-  update_id: number;
-  model_id: number;
+  update_id: number; // INT
+  model_id: string; // FK (UUID)
   version_before?: string;
   version_after?: string;
-  update_date: string; // DATE
+  update_date: string; // DATE NOT NULL
   summary?: string;
   key_improvements?: any; // JSON
-  performance_improvement?: number;
-  created_at: Date;
-  updated_at: Date;
+  performance_improvement?: number; // DECIMAL(5,2) - %
+  created_at: Date; // TIMESTAMP
+  updated_at: Date; // TIMESTAMP
 }
 
 /**
  * 모델 업데이트 상세
  */
 export interface ModelUpdateDetail {
-  detail_id: number;
-  update_id: number;
+  detail_id: number; // INT
+  update_id: number; // INT (FK)
   benchmark_name?: string;
-  before_score?: number;
-  after_score?: number;
-  improvement_pct?: number;
-  created_at: Date;
+  before_score?: number; // DECIMAL(8,4)
+  after_score?: number; // DECIMAL(8,4)
+  improvement_pct?: number; // DECIMAL(5,2)
+  created_at: Date; // TIMESTAMP
 }
 
 /**
