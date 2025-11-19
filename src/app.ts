@@ -11,6 +11,7 @@ import { Logger } from './database/logger';
 import { v4 as uuidv4 } from 'uuid';
 import authRouter from './routes/auth';
 import communityRouter from './routes/community';
+import modelsRouter, { updateRouter, creatorRouter } from './routes/models';
 
 const logger = new Logger('App');
 
@@ -65,8 +66,9 @@ export function createApp(): Express {
   // 라우트 마운트
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/community', communityRouter);
-  // app.use('/api/v1/models', modelsRouter);
-  // ...
+  app.use('/api/v1/models', modelsRouter);
+  app.use('/api/v1/updates', updateRouter);
+  app.use('/api/v1/creators', creatorRouter);
 
   // 404 핸들러
   app.use((req: Request, res: Response) => {
