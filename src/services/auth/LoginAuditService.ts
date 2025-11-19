@@ -3,9 +3,9 @@
  * agent_exception_handling_guide.md 규칙 준수
  */
 
-import { executeModify, queryOne } from '../database/mysql';
-import { getRedisCache } from '../database/redis';
-import { DatabaseException, ValidationException } from '../exceptions';
+import { executeModify, queryOne } from '../../database/mysql';
+import { getRedisCache } from '../../database/redis';
+import { DatabaseException, ValidationException } from '../../exceptions';
 
 /**
  * 로그인 감사 로그 요청
@@ -96,34 +96,6 @@ export async function incrementLoginFailures(email: string): Promise<{
 
       // Redis에 잠금 기록
       await redisCache.set(lockKey, lockedUntil.toISOString(), lockDurationSeconds);
-
-      // DB에도 잠금 시간 업데이트
-      try {
-        await executeModify(
-          'UPDATE users SET account_locked_until = ?, failed_login_attempts = ? WHERE email = ?',
-          [lockedUntil, attempts, email]
-        );
-      } catch (dbError) {
-        // DB 업데이트 실패해도 Redis는 적용됨
-        throw new DatabaseException(
-          `계정 잠금 정보 저장 실패: ${dbError}`,
-          methodName
-        );
-      }
-    } else {
-      // DB에 실패 횟수만 업데이트
-      try {
-        await executeModify(
-          'UPDATE users SET failed_login_attempts = ? WHERE email = ?',
-          [attempts, email]
-        );
-      } catch (dbError) {
-        // DB 업데이트 실패해도 로그인 실패 처리는 진행
-        throw new DatabaseException(
-          `실패 횟수 저장 실패: ${dbError}`,
-          methodName
-        );
-      }
     }
 
     return {
@@ -166,41 +138,10 @@ export async function isAccountLocked(email: string): Promise<{
       if (now >= lockedUntil) {
         // 잠금 해제
         await redisCache.delete(lockKey);
-        await executeModify(
-          'UPDATE users SET account_locked_until = NULL, failed_login_attempts = 0 WHERE email = ?',
-          [email]
-        );
         return { isLocked: false };
       }
 
       // 아직 잠금 상태
-      const remainingSeconds = Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000);
-      return {
-        isLocked: true,
-        lockedUntil,
-        remainingSeconds
-      };
-    }
-
-    // DB에서 잠금 확인
-    const user = await queryOne<any>(
-      'SELECT account_locked_until FROM users WHERE email = ?',
-      [email]
-    );
-
-    if (user?.account_locked_until) {
-      const lockedUntil = new Date(user.account_locked_until);
-      const now = new Date();
-
-      if (now >= lockedUntil) {
-        // 잠금 해제
-        await executeModify(
-          'UPDATE users SET account_locked_until = NULL, failed_login_attempts = 0 WHERE email = ?',
-          [email]
-        );
-        return { isLocked: false };
-      }
-
       const remainingSeconds = Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000);
       return {
         isLocked: true,
@@ -233,12 +174,6 @@ export async function resetLoginFailures(email: string): Promise<void> {
     // Redis 초기화
     await redisCache.delete(failureKey);
     await redisCache.delete(lockKey);
-
-    // DB 초기화
-    await executeModify(
-      'UPDATE users SET failed_login_attempts = 0, account_locked_until = NULL WHERE email = ?',
-      [email]
-    );
   } catch (error) {
     throw new DatabaseException(
       `로그인 실패 횟수 초기화 실패: ${error}`,

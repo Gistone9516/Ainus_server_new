@@ -15,7 +15,7 @@ import {
   resetPassword,
   changePassword,
   verifyEmail
-} from '../services/AuthService';
+} from '../services/auth/AuthService';
 import { requireAuth } from '../middleware/auth';
 import { asyncHandler } from '../middleware/errorHandler';
 import { createLoginRateLimiter, createRegisterRateLimiter } from '../middleware/rateLimiter';
@@ -26,21 +26,21 @@ import {
   getGoogleAccessToken,
   getGoogleUserInfo,
   googleLogin
-} from '../services/GoogleOAuthService';
+} from '../services/auth/GoogleOAuthService';
 import {
   generateKakaoOAuthState,
   validateKakaoOAuthState,
   getKakaoAccessToken,
   getKakaoUserInfo,
   kakaoLogin
-} from '../services/KakaoOAuthService';
+} from '../services/auth/KakaoOAuthService';
 import {
   generateNaverOAuthState,
   validateNaverOAuthState,
   getNaverAccessToken,
   getNaverUserInfo,
   naverLogin
-} from '../services/NaverOAuthService';
+} from '../services/auth/NaverOAuthService';
 
 const router = Router();
 

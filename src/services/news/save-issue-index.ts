@@ -1,5 +1,5 @@
 /**
- * MySQL issue_index 테이블에 계산된 이슈 지수 저장
+ * MySQL issue_index_daily 테이블에 계산된 이슈 지수 저장
  */
 
 import mysql from "mysql2/promise";
@@ -9,6 +9,7 @@ import mysql from "mysql2/promise";
 interface IssueIndexData {
   collected_at: string; // ISO 8601 datetime
   overall_index: number;
+  article_count?: number;
 }
 
 // ============ MySQL 연결 ============
@@ -51,13 +52,20 @@ async function closeMySQLPool(): Promise<void> {
 // ============ 저장 함수 ============
 
 /**
- * issue_index 테이블에 이슈 지수 저장
+ * issue_index_daily 테이블에 이슈 지수 저장
  *
  * 테이블 스키마:
- * CREATE TABLE issue_index (
- *   collected_at DATETIME NOT NULL PRIMARY KEY,
- *   overall_index DECIMAL(5, 1) NOT NULL,
- *   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+ * CREATE TABLE issue_index_daily (
+ *   index_id INT PRIMARY KEY AUTO_INCREMENT,
+ *   index_date DATE UNIQUE NOT NULL,
+ *   score INT CHECK (score >= 0 AND score <= 100),
+ *   comparison_previous_week DECIMAL(5, 2),
+ *   main_keyword VARCHAR(100),
+ *   trend VARCHAR(20),
+ *   article_count INT,
+ *   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ *   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ *   INDEX idx_index_date (index_date)
  * );
  *
  * @param data 저장할 이슈 지수 데이터
@@ -70,22 +78,23 @@ async function saveIssueIndexToMySQL(data: IssueIndexData): Promise<void> {
 
   try {
     const query = `
-      INSERT INTO issue_index (collected_at, overall_index)
-      VALUES (?, ?)
+      INSERT INTO issue_index_daily (index_date, score, article_count)
+      VALUES (?, ?, ?)
       ON DUPLICATE KEY UPDATE
-        overall_index = VALUES(overall_index),
-        created_at = NOW()
+        score = VALUES(score),
+        article_count = VALUES(article_count),
+        updated_at = NOW()
     `;
 
-    // ISO 8601을 MySQL DATETIME 형식으로 변환
-    // "2025-11-11T12:00:00Z" → "2025-11-11 12:00:00"
-    const collectedAtMySQL = data.collected_at.replace("T", " ").replace("Z", "");
+    // ISO 8601에서 날짜 부분만 추출 (YYYY-MM-DD)
+    const indexDate = data.collected_at.split("T")[0];
+    const score = Math.round(data.overall_index);
 
-    const [result] = await connection.execute(query, [collectedAtMySQL, data.overall_index]);
+    await connection.execute(query, [indexDate, score, data.article_count || null]);
 
     console.log(`✅ Issue index saved successfully`);
-    console.log(`   - collected_at: ${data.collected_at}`);
-    console.log(`   - overall_index: ${data.overall_index}`);
+    console.log(`   - index_date: ${indexDate}`);
+    console.log(`   - score: ${score}`);
     console.log(`   - timestamp: ${new Date().toISOString()}\n`);
 
     return;
@@ -110,9 +119,9 @@ async function getLatestIssueIndex(): Promise<IssueIndexData | null> {
 
   try {
     const query = `
-      SELECT collected_at, overall_index
-      FROM issue_index
-      ORDER BY collected_at DESC
+      SELECT index_date, score, article_count
+      FROM issue_index_daily
+      ORDER BY index_date DESC
       LIMIT 1
     `;
 
@@ -121,15 +130,17 @@ async function getLatestIssueIndex(): Promise<IssueIndexData | null> {
     if (Array.isArray(rows) && rows.length > 0) {
       const row = rows[0] as any;
 
-      // MySQL DATETIME을 ISO 8601로 변환
-      // "2025-11-11 12:00:00" → "2025-11-11T12:00:00Z"
-      const collectedAt = new Date(row.collected_at).toISOString();
+      // Date 객체 또는 문자열을 ISO 문자열로 변환
+      // row.index_date가 Date 객체일 수 있음
+      const dateObj = new Date(row.index_date);
+      const collectedAt = dateObj.toISOString();
 
       console.log(`   ✅ Latest issue index found: ${collectedAt}`);
 
       return {
         collected_at: collectedAt,
-        overall_index: row.overall_index,
+        overall_index: row.score,
+        article_count: row.article_count
       };
     }
 
@@ -156,28 +167,30 @@ async function getIssueIndexByDate(collectedAt: string): Promise<IssueIndexData 
   const connection = await pool.getConnection();
 
   try {
-    // ISO 8601을 MySQL DATETIME 형식으로 변환
-    const collectedAtMySQL = collectedAt.replace("T", " ").replace("Z", "");
+    // ISO 8601에서 날짜 부분만 추출
+    const indexDate = collectedAt.split("T")[0];
 
     const query = `
-      SELECT collected_at, overall_index
-      FROM issue_index
-      WHERE collected_at = ?
+      SELECT index_date, score, article_count
+      FROM issue_index_daily
+      WHERE index_date = ?
       LIMIT 1
     `;
 
-    const [rows] = await connection.execute(query, [collectedAtMySQL]);
+    const [rows] = await connection.execute(query, [indexDate]);
 
     if (Array.isArray(rows) && rows.length > 0) {
       const row = rows[0] as any;
 
-      const isoTime = new Date(row.collected_at).toISOString();
+      const dateObj = new Date(row.index_date);
+      const isoTime = dateObj.toISOString();
 
       console.log(`   ✅ Issue index found: ${isoTime}`);
 
       return {
         collected_at: isoTime,
-        overall_index: row.overall_index,
+        overall_index: row.score,
+        article_count: row.article_count
       };
     }
 
@@ -208,23 +221,23 @@ async function getIssueIndexByDateRange(
   const connection = await pool.getConnection();
 
   try {
-    // ISO 8601을 MySQL DATETIME 형식으로 변환
-    const startDateMySQL = startDate.replace("T", " ").replace("Z", "");
-    const endDateMySQL = endDate.replace("T", " ").replace("Z", "");
+    const startDateStr = startDate.split("T")[0];
+    const endDateStr = endDate.split("T")[0];
 
     const query = `
-      SELECT collected_at, overall_index
-      FROM issue_index
-      WHERE collected_at BETWEEN ? AND ?
-      ORDER BY collected_at DESC
+      SELECT index_date, score, article_count
+      FROM issue_index_daily
+      WHERE index_date BETWEEN ? AND ?
+      ORDER BY index_date DESC
     `;
 
-    const [rows] = await connection.execute(query, [startDateMySQL, endDateMySQL]);
+    const [rows] = await connection.execute(query, [startDateStr, endDateStr]);
 
     if (Array.isArray(rows)) {
       const results = rows.map((row: any) => ({
-        collected_at: new Date(row.collected_at).toISOString(),
-        overall_index: row.overall_index,
+        collected_at: new Date(row.index_date).toISOString(),
+        overall_index: row.score,
+        article_count: row.article_count
       }));
 
       console.log(`   ✅ Found ${results.length} records in range`);

@@ -4,23 +4,23 @@
  * 예외 처리 가이드를 따릅니다
  */
 
-import { executeQuery, queryOne, executeModify } from '../database/mysql';
-import { getRedisCache } from '../database/redis';
-import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../utils/jwt';
-import { hashPassword, verifyPassword } from '../utils/password';
-import { isStrongPassword } from '../utils/passwordValidator';
+import { executeQuery, queryOne, executeModify } from '../../database/mysql';
+import { getRedisCache } from '../../database/redis';
+import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../../utils/jwt';
+import { hashPassword, verifyPassword } from '../../utils/password';
+import { isStrongPassword } from '../../utils/passwordValidator';
 import {
   ValidationException,
   DatabaseException,
   AuthenticationException
-} from '../exceptions';
+} from '../../exceptions';
 import {
   isAccountLocked,
   incrementLoginFailures,
   resetLoginFailures,
   recordLoginAudit
 } from './LoginAuditService';
-import { User, JwtPayload } from '../types';
+import { User, JwtPayload } from '../../types';
 
 interface RegisterRequest {
   email: string;
@@ -155,21 +155,28 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
   try {
     const result = await executeModify(
       `INSERT INTO users
-       (email, password_hash, nickname, auth_provider, marketing_agreed, terms_agreed, privacy_agreed, is_active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (email, password_hash, nickname)
+       VALUES (?, ?, ?)`,
       [
         request.email,
         passwordHash,
-        request.nickname,
-        'local',
-        request.marketing_agreed ?? false,
-        request.terms_agreed,
-        request.privacy_agreed,
-        true
+        request.nickname
       ]
     );
 
     const userId = result.insertId;
+
+    // 사용자 프로필 생성 (약관 동의 정보 저장)
+    const preferences = {
+      marketing_agreed: request.marketing_agreed ?? false,
+      terms_agreed: request.terms_agreed,
+      privacy_agreed: request.privacy_agreed
+    };
+
+    await executeModify(
+      `INSERT INTO user_profiles (user_id, preferences) VALUES (?, ?)`,
+      [userId, JSON.stringify(preferences)]
+    );
 
     // 토큰 생성
     const token = generateToken(userId, request.email, request.nickname);
@@ -241,7 +248,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
   let user: any;
   try {
     user = await queryOne<any>(
-      'SELECT user_id, email, nickname, password_hash, auth_provider, is_active FROM users WHERE email = ?',
+      'SELECT user_id, email, nickname, password_hash FROM users WHERE email = ?',
       [request.email]
     );
 
@@ -269,28 +276,6 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
 
       throw new AuthenticationException(
         '이메일 또는 비밀번호가 일치하지 않습니다 (ERROR_2001)',
-        methodName
-      );
-    }
-
-    // 계정 활성 여부 확인
-    if (!user.is_active) {
-      try {
-        await recordLoginAudit({
-          user_id: user.user_id,
-          email: request.email,
-          status: 'blocked',
-          failure_reason: 'Account disabled',
-          ip_address: request.ip_address,
-          user_agent: request.user_agent,
-          device_type: request.device_type
-        });
-      } catch (auditError) {
-        console.error(`감사 로그 기록 실패: ${auditError}`);
-      }
-
-      throw new AuthenticationException(
-        '비활성화된 계정입니다 (ERROR_2004)',
         methodName
       );
     }
@@ -375,13 +360,13 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
       user.user_id,
       user.email,
       user.nickname,
-      user.auth_provider
+      'local'
     );
     const refresh_token = generateRefreshToken(
       user.user_id,
       user.email,
       user.nickname,
-      user.auth_provider
+      'local'
     );
 
     // Refresh Token을 Redis에 저장 (토큰 갱신 시 검증용)
@@ -405,7 +390,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
         user_id: user.user_id,
         email: user.email,
         nickname: user.nickname,
-        auth_provider: user.auth_provider
+        auth_provider: 'local'
       },
       tokens: {
         access_token,
@@ -689,7 +674,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
     }
 
     // 2단계: 비밀번호 재설정 토큰 생성
-    const { generatePasswordResetToken, calculateExpiryTime } = await import('../utils/tokenGenerator');
+    const { generatePasswordResetToken, calculateExpiryTime } = await import('../../utils/tokenGenerator');
     const { token, hash } = generatePasswordResetToken();
     const expiryTime = calculateExpiryTime(60); // 1시간 유효
 
@@ -709,7 +694,7 @@ export async function forgotPassword(email: string): Promise<{ success: boolean;
 
     // 4단계: 비밀번호 재설정 이메일 전송
     try {
-      const { sendPasswordResetEmail } = await import('./EmailService');
+      const { sendPasswordResetEmail } = await import('../common/EmailService');
       const resetLink = `http://localhost:3000/auth/reset-password?token=${token}`;
       await sendPasswordResetEmail(user.email, token, resetLink);
     } catch (error) {
@@ -754,7 +739,7 @@ export async function resetPassword(
     }
 
     // 2단계: 토큰 검증
-    const { verifyToken: verifyTokenFunc, hashToken: hashTokenFunc } = await import('../utils/tokenGenerator');
+    const { verifyToken: verifyTokenFunc, hashToken: hashTokenFunc } = await import('../../utils/tokenGenerator');
     const tokenHash = hashTokenFunc(token);
 
     const resetTokenRecord = await queryOne<any>(
@@ -900,7 +885,7 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
     // 2단계: 토큰 검증 (현재는 Redis 또는 DB에서 확인)
     // 실제 구현은 email_verification_tokens 테이블이 필요함
     // 여기서는 간단히 처리
-    const { hashToken: hashTokenFunc } = await import('../utils/tokenGenerator');
+    const { hashToken: hashTokenFunc } = await import('../../utils/tokenGenerator');
     const tokenHash = hashTokenFunc(token);
 
     // 데이터베이스에서 토큰 확인 (email_verification_tokens 테이블 가정)

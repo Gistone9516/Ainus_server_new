@@ -23,7 +23,7 @@ import {
   getClustersSnapshot,
   getArticlesOriginal,
 } from "./api/api-endpoints";
-import { startScheduler } from "./services/news-clustering-pipeline";
+import { startScheduler } from "./services/news/news-clustering-pipeline";
 import { testElasticsearchConnection } from "./database/elasticsearch";
 
 dotenv.config();

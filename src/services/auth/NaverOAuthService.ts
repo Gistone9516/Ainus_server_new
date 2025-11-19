@@ -1,99 +1,97 @@
 /**
- * Kakao OAuth 2.0 서비스 (TASK-2-5~8)
- * Kakao 로그인 및 토큰 관리
+ * Naver OAuth 2.0 서비스 (TASK-2-9~12)
+ * Naver 로그인 및 토큰 관리
  */
 
 import axios from 'axios';
-import { getConfig } from '../config/environment';
-import { getRedisCache } from '../database/redis';
-import { queryOne, executeModify } from '../database/mysql';
-import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
-import { encrypt, generateRandomToken } from '../utils/encryption';
+import { getConfig } from '../../config/environment';
+import { getRedisCache } from '../../database/redis';
+import { queryOne, executeModify } from '../../database/mysql';
+import { generateAccessToken, generateRefreshToken } from '../../utils/jwt';
+import { encrypt, generateRandomToken } from '../../utils/encryption';
+import { hashPassword } from '../../utils/password';
 import {
   DatabaseException,
   ExternalAPIException
-} from '../exceptions';
+} from '../../exceptions';
 
 const config = getConfig();
 
-interface KakaoTokenResponse {
+interface NaverTokenResponse {
   access_token: string;
+  refresh_token: string;
   token_type: string;
-  refresh_token?: string;
   expires_in: number;
-  refresh_token_expires_in?: number;
-  scope?: string;
 }
 
-interface KakaoUserInfo {
-  id: number; // Kakao User ID
-  kakao_account?: {
-    profile_nickname?: string;
-    profile_image_url?: string;
-    email?: string;
-    email_needs_agreement?: boolean;
-  };
-  properties?: {
+interface NaverUserInfo {
+  resultcode: string;
+  message: string;
+  response: {
+    id: string; // Naver User ID
     nickname?: string;
+    name?: string;
+    email?: string;
     profile_image?: string;
+    mobile?: boolean;
   };
 }
 
 /**
- * Kakao OAuth 상태 생성
+ * Naver OAuth 상태 생성
  */
-export async function generateKakaoOAuthState(): Promise<string> {
-  const methodName = 'generateKakaoOAuthState';
+export async function generateNaverOAuthState(): Promise<string> {
+  const methodName = 'generateNaverOAuthState';
 
   try {
     const state = generateRandomToken(32);
     const redisCache = getRedisCache();
 
     // Redis에 상태 저장 (10분 TTL)
-    await redisCache.set(`oauth:kakao:state:${state}`, 'pending', 600);
+    await redisCache.set(`oauth:naver:state:${state}`, 'pending', 600);
 
     return state;
   } catch (error) {
-    throw new DatabaseException(`Kakao OAuth 상태 생성 실패: ${error}`, methodName);
+    throw new DatabaseException(`Naver OAuth 상태 생성 실패: ${error}`, methodName);
   }
 }
 
 /**
- * Kakao OAuth 상태 검증
+ * Naver OAuth 상태 검증
  */
-export async function validateKakaoOAuthState(state: string): Promise<boolean> {
-  const methodName = 'validateKakaoOAuthState';
+export async function validateNaverOAuthState(state: string): Promise<boolean> {
+  const methodName = 'validateNaverOAuthState';
 
   try {
     const redisCache = getRedisCache();
-    const savedState = await redisCache.get(`oauth:kakao:state:${state}`);
+    const savedState = await redisCache.get(`oauth:naver:state:${state}`);
 
     if (savedState) {
-      await redisCache.delete(`oauth:kakao:state:${state}`);
+      await redisCache.delete(`oauth:naver:state:${state}`);
       return true;
     }
 
     return false;
   } catch (error) {
-    throw new DatabaseException(`Kakao OAuth 상태 검증 실패: ${error}`, methodName);
+    throw new DatabaseException(`Naver OAuth 상태 검증 실패: ${error}`, methodName);
   }
 }
 
 /**
  * Authorization Code로 Access Token 획득
  */
-export async function getKakaoAccessToken(code: string): Promise<KakaoTokenResponse> {
-  const methodName = 'getKakaoAccessToken';
+export async function getNaverAccessToken(code: string, state: string): Promise<NaverTokenResponse> {
+  const methodName = 'getNaverAccessToken';
 
   try {
-    const response = await axios.post<KakaoTokenResponse>(
-      'https://kauth.kakao.com/oauth/token',
+    const response = await axios.post<NaverTokenResponse>(
+      'https://nid.naver.com/oauth2.0/token',
       {
         grant_type: 'authorization_code',
-        client_id: config.oauth.kakao.clientId,
-        client_secret: config.oauth.kakao.clientSecret,
-        redirect_uri: config.oauth.kakao.redirectUri,
-        code
+        client_id: config.oauth.naver.clientId,
+        client_secret: config.oauth.naver.clientSecret,
+        code,
+        state
       },
       {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -104,11 +102,11 @@ export async function getKakaoAccessToken(code: string): Promise<KakaoTokenRespo
     return response.data;
   } catch (error) {
     const errorMsg = axios.isAxiosError(error)
-      ? `Kakao API 오류: ${error.response?.status}`
+      ? `Naver API 오류: ${error.response?.status}`
       : String(error);
 
     throw new ExternalAPIException(
-      `Kakao Access Token 획득 실패: ${errorMsg} (ERROR_5003)`,
+      `Naver Access Token 획득 실패: ${errorMsg} (ERROR_5004)`,
       methodName,
       axios.isAxiosError(error) ? error.response?.status : undefined
     );
@@ -116,28 +114,37 @@ export async function getKakaoAccessToken(code: string): Promise<KakaoTokenRespo
 }
 
 /**
- * Kakao API로부터 사용자 정보 조회
+ * Naver API로부터 사용자 정보 조회
+ * Naver는 특별한 응답 구조 사용 (response.response)
  */
-export async function getKakaoUserInfo(accessToken: string): Promise<KakaoUserInfo> {
-  const methodName = 'getKakaoUserInfo';
+export async function getNaverUserInfo(accessToken: string): Promise<NaverUserInfo['response']> {
+  const methodName = 'getNaverUserInfo';
 
   try {
-    const response = await axios.get<KakaoUserInfo>(
-      'https://kapi.kakao.com/v2/user/me',
+    const response = await axios.get<NaverUserInfo>(
+      'https://openapi.naver.com/v1/nid/me',
       {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'X-Naver-Client-Id': config.oauth.naver.clientId
+        },
         timeout: 10000
       }
     );
 
-    return response.data;
+    // Naver는 resultcode 확인 필요
+    if (response.data.resultcode !== '00') {
+      throw new Error(`Naver API 오류: ${response.data.message}`);
+    }
+
+    return response.data.response;
   } catch (error) {
     const errorMsg = axios.isAxiosError(error)
-      ? `Kakao API 오류: ${error.response?.status}`
+      ? `Naver API 오류: ${error.response?.status}`
       : String(error);
 
     throw new ExternalAPIException(
-      `Kakao 사용자 정보 조회 실패: ${errorMsg} (ERROR_5003)`,
+      `Naver 사용자 정보 조회 실패: ${errorMsg} (ERROR_5004)`,
       methodName,
       axios.isAxiosError(error) ? error.response?.status : undefined
     );
@@ -145,11 +152,11 @@ export async function getKakaoUserInfo(accessToken: string): Promise<KakaoUserIn
 }
 
 /**
- * Kakao 로그인/회원가입 처리
+ * Naver 로그인/회원가입 처리
  */
-export async function kakaoLogin(
+export async function naverLogin(
   accessToken: string,
-  kakaoUserInfo: KakaoUserInfo,
+  naverUserInfo: NaverUserInfo['response'],
   ipAddress: string,
   userAgent: string
 ): Promise<{
@@ -165,24 +172,21 @@ export async function kakaoLogin(
     expires_in: number;
   };
 }> {
-  const methodName = 'kakaoLogin';
+  const methodName = 'naverLogin';
 
   try {
     // 사용자 정보 추출
-    const kakaoId = String(kakaoUserInfo.id);
-    const nickname = kakaoUserInfo.kakao_account?.profile_nickname ||
-                    kakaoUserInfo.properties?.nickname ||
-                    `kakao_${kakaoId.slice(-6)}`;
-    const profileImage = kakaoUserInfo.kakao_account?.profile_image_url ||
-                        kakaoUserInfo.properties?.profile_image;
-    const email = kakaoUserInfo.kakao_account?.email;
+    const naverId = naverUserInfo.id;
+    const nickname = naverUserInfo.nickname || naverUserInfo.name || `naver_${naverId.slice(-6)}`;
+    const profileImage = naverUserInfo.profile_image;
+    const email = naverUserInfo.email;
 
     // 1단계: 기존 사용자 조회 (provider_user_id로)
     let user: any = await queryOne<any>(
-      'SELECT u.user_id, u.email, u.nickname, u.auth_provider FROM users u ' +
+      'SELECT u.user_id, u.email, u.nickname FROM users u ' +
       'INNER JOIN user_social_accounts s ON u.user_id = s.user_id ' +
       'WHERE s.provider = ? AND s.provider_user_id = ?',
-      ['kakao', kakaoId]
+      ['naver', naverId]
     );
 
     let isNewUser = false;
@@ -202,29 +206,32 @@ export async function kakaoLogin(
         user = existingByEmail;
       } else {
         // 완전히 새로운 사용자 생성
+        // 비밀번호는 랜덤 생성
+        const randomPassword = generateRandomToken(16);
+        const passwordHash = await hashPassword(randomPassword);
+
         const result = await executeModify(
-          `INSERT INTO users (email, nickname, auth_provider, is_active)
-           VALUES (?, ?, ?, ?)`,
-          [email || null, nickname, 'kakao', true]
+          `INSERT INTO users (email, nickname, password_hash)
+           VALUES (?, ?, ?)`,
+          [email || null, nickname, passwordHash]
         );
 
         user = {
           user_id: result.insertId,
           email: email || null,
-          nickname,
-          auth_provider: 'kakao'
+          nickname
         };
         isNewUser = true;
       }
     }
 
-    // 3단계: Kakao 소셜 계정 저장/업데이트
+    // 3단계: Naver 소셜 계정 저장/업데이트
     try {
       const encryptedAccessToken = encrypt(accessToken);
 
       const existingSocial = await queryOne<any>(
         'SELECT social_account_id FROM user_social_accounts WHERE user_id = ? AND provider = ?',
-        [user.user_id, 'kakao']
+        [user.user_id, 'naver']
       );
 
       if (existingSocial) {
@@ -243,8 +250,8 @@ export async function kakaoLogin(
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             user.user_id,
-            'kakao',
-            kakaoId,
+            'naver',
+            naverId,
             email || null,
             nickname,
             profileImage || null,
@@ -254,7 +261,7 @@ export async function kakaoLogin(
       }
     } catch (socialError) {
       throw new DatabaseException(
-        `Kakao 소셜 계정 저장 실패: ${socialError}`,
+        `Naver 소셜 계정 저장 실패: ${socialError}`,
         methodName
       );
     }
@@ -264,20 +271,20 @@ export async function kakaoLogin(
       user.user_id,
       user.email,
       user.nickname,
-      'kakao'
+      'naver'
     );
     const refreshTokenJwt = generateRefreshToken(
       user.user_id,
       user.email,
       user.nickname,
-      'kakao'
+      'naver'
     );
 
     return {
       user_id: user.user_id,
       email: user.email,
       nickname: user.nickname,
-      auth_provider: user.auth_provider,
+      auth_provider: 'naver',
       is_new_user: isNewUser,
       tokens: {
         access_token: accessTokenJwt,
@@ -288,6 +295,6 @@ export async function kakaoLogin(
     };
   } catch (error) {
     if (error instanceof (DatabaseException || ExternalAPIException)) throw error;
-    throw new DatabaseException(`Kakao 로그인 처리 실패: ${error}`, methodName);
+    throw new DatabaseException(`Naver 로그인 처리 실패: ${error}`, methodName);
   }
 }
