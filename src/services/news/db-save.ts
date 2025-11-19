@@ -1,10 +1,11 @@
 /**
- * GPT 분류 결과를 MongoDB에 저장
+ * GPT 분류 결과를 MySQL에 저장
  * - Clusters: 현재 클러스터 상태 유지
  * - Cluster_Snapshots: 매 수집 시점의 클러스터 스냅샷 기록 (활성 + 비활성)
  */
 
-import { MongoClient, Db, Collection } from "mongodb";
+import { executeQuery, executeModify, getDatabasePool } from "../../database/mysql";
+import { PoolConnection } from "mysql2/promise";
 
 // ============ Type 정의 ============
 
@@ -17,10 +18,10 @@ interface HistoryEntry {
 interface ClusterDocument {
   cluster_id: string;
   topic_name: string;
-  tags: string[];
+  tags: string[]; // JSON parsed
   appearance_count: number;
   status: "active" | "inactive";
-  history: HistoryEntry[];
+  history: HistoryEntry[]; // Derived from cluster_history table
   created_at: string;
   updated_at: string;
 }
@@ -52,70 +53,61 @@ interface GPTClassificationResult {
   processed_at: string;
 }
 
-// ============ MongoDB 연결 ============
-
-let mongoClient: MongoClient | null = null;
-let db: Db | null = null;
-
-/**
- * MongoDB 연결 초기화
- */
-async function connectToMongoDB(): Promise<Db> {
-  if (db) {
-    return db;
-  }
-
-  const mongoUri = process.env.MONGODB_URI || "mongodb://localhost:27017";
-  const dbName = process.env.MONGODB_DB_NAME || "ai_news_classifier";
-
-  mongoClient = new MongoClient(mongoUri);
-  await mongoClient.connect();
-
-  db = mongoClient.db(dbName);
-
-  console.log(`✅ Connected to MongoDB: ${dbName}`);
-
-  return db;
-}
-
-/**
- * MongoDB 연결 종료
- */
-async function closeMongoDBConnection(): Promise<void> {
-  if (mongoClient) {
-    await mongoClient.close();
-    mongoClient = null;
-    db = null;
-    console.log(`✅ MongoDB connection closed`);
-  }
-}
-
-// ============ 컬렉션 참조 ============
-
-/**
- * clusters 컬렉션 참조
- */
-async function getClustersCollection(): Promise<Collection<ClusterDocument>> {
-  const database = await connectToMongoDB();
-  return database.collection<ClusterDocument>("clusters");
-}
-
-/**
- * cluster_snapshots 컬렉션 참조
- */
-async function getSnapshotsCollection(): Promise<Collection<ClusterSnapshot>> {
-  const database = await connectToMongoDB();
-  return database.collection<ClusterSnapshot>("cluster_snapshots");
-}
-
 // ============ 헬퍼 함수 ============
 
 /**
  * 기존 클러스터 조회
  */
 async function getExistingClusters(): Promise<ClusterDocument[]> {
-  const collection = await getClustersCollection();
-  return collection.find({}).toArray();
+  // 1. Fetch clusters
+  const clustersSql = `
+    SELECT * FROM clusters
+  `;
+  const clusters = await executeQuery<any>(clustersSql);
+
+  // 2. Fetch history for each cluster (Optimization: could be done with JOIN or separate query per cluster if needed, 
+  // but for now assuming reasonable number of clusters, we can fetch all history or just fetch on demand.
+  // However, the original logic requires full history to be present in the object.
+  // Let's fetch recent history or just keep it simple. 
+  // The original code stored history in the document. Here it's in a separate table.
+  // For the purpose of 'updateExistingCluster', we just need to append to history table.
+  // We don't necessarily need to load all history into memory unless we use it.
+  // Looking at usage: 'updateExistingCluster' appends to history.
+  // So we can just return the cluster info without full history for now, 
+  // or fetch history if strictly needed.
+  // The 'ClusterDocument' interface has 'history'. Let's populate it.
+
+  const result: ClusterDocument[] = [];
+
+  for (const row of clusters) {
+    // Fetch history
+    const historySql = `
+      SELECT collected_at, article_indices, article_count 
+      FROM cluster_history 
+      WHERE cluster_id = ? 
+      ORDER BY collected_at DESC
+    `;
+    const historyRows = await executeQuery<any>(historySql, [row.cluster_id]);
+
+    const history: HistoryEntry[] = historyRows.map((h: any) => ({
+      collected_at: h.collected_at instanceof Date ? h.collected_at.toISOString() : h.collected_at,
+      article_indices: typeof h.article_indices === 'string' ? JSON.parse(h.article_indices) : h.article_indices,
+      article_count: h.article_count
+    }));
+
+    result.push({
+      cluster_id: row.cluster_id,
+      topic_name: row.topic_name,
+      tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+      appearance_count: row.appearance_count,
+      status: row.status,
+      history: history,
+      created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+      updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -148,39 +140,44 @@ function calculateClusterScore(appearanceCount: number): number {
 
 /**
  * 기존 클러스터 업데이트
- * - history에 새 항목 추가
- * - appearance_count 업데이트
- * - status: active 유지
+ * - clusters 테이블 업데이트
+ * - cluster_history 테이블에 새 항목 추가
  */
 async function updateExistingCluster(
+  connection: PoolConnection,
   existingCluster: ClusterDocument,
   gptCluster: GPTClusterOutput,
   collectedAt: string
 ): Promise<void> {
-  const collection = await getClustersCollection();
+  // 1. Update clusters table
+  const updateSql = `
+    UPDATE clusters 
+    SET 
+      topic_name = ?, 
+      tags = ?, 
+      appearance_count = ?, 
+      status = 'active', 
+      updated_at = NOW()
+    WHERE cluster_id = ?
+  `;
+  await connection.execute(updateSql, [
+    gptCluster.topic_name,
+    JSON.stringify(gptCluster.tags),
+    gptCluster.appearance_count,
+    gptCluster.cluster_id
+  ]);
 
-  const updatedHistory: HistoryEntry[] = [
-    ...existingCluster.history,
-    {
-      collected_at: collectedAt,
-      article_indices: gptCluster.article_indices,
-      article_count: gptCluster.article_count,
-    },
-  ];
-
-  await collection.updateOne(
-    { cluster_id: gptCluster.cluster_id },
-    {
-      $set: {
-        topic_name: gptCluster.topic_name,
-        tags: gptCluster.tags,
-        appearance_count: gptCluster.appearance_count,
-        history: updatedHistory,
-        status: "active",
-        updated_at: new Date().toISOString(),
-      },
-    }
-  );
+  // 2. Insert into cluster_history
+  const historySql = `
+    INSERT INTO cluster_history (cluster_id, collected_at, article_indices, article_count)
+    VALUES (?, ?, ?, ?)
+  `;
+  await connection.execute(historySql, [
+    gptCluster.cluster_id,
+    collectedAt,
+    JSON.stringify(gptCluster.article_indices),
+    gptCluster.article_count
+  ]);
 
   console.log(
     `   ✏️  Updated cluster: ${gptCluster.cluster_id} (appearance: ${gptCluster.appearance_count})`
@@ -191,29 +188,33 @@ async function updateExistingCluster(
  * 새로운 클러스터 생성
  */
 async function createNewCluster(
+  connection: PoolConnection,
   gptCluster: GPTClusterOutput,
   collectedAt: string
 ): Promise<void> {
-  const collection = await getClustersCollection();
+  // 1. Insert into clusters table
+  const insertSql = `
+    INSERT INTO clusters (cluster_id, topic_name, tags, appearance_count, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'active', NOW(), NOW())
+  `;
+  await connection.execute(insertSql, [
+    gptCluster.cluster_id,
+    gptCluster.topic_name,
+    JSON.stringify(gptCluster.tags),
+    gptCluster.appearance_count
+  ]);
 
-  const newCluster: ClusterDocument = {
-    cluster_id: gptCluster.cluster_id,
-    topic_name: gptCluster.topic_name,
-    tags: gptCluster.tags,
-    appearance_count: gptCluster.appearance_count,
-    status: "active",
-    history: [
-      {
-        collected_at: collectedAt,
-        article_indices: gptCluster.article_indices,
-        article_count: gptCluster.article_count,
-      },
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  await collection.insertOne(newCluster);
+  // 2. Insert into cluster_history
+  const historySql = `
+    INSERT INTO cluster_history (cluster_id, collected_at, article_indices, article_count)
+    VALUES (?, ?, ?, ?)
+  `;
+  await connection.execute(historySql, [
+    gptCluster.cluster_id,
+    collectedAt,
+    JSON.stringify(gptCluster.article_indices),
+    gptCluster.article_count
+  ]);
 
   console.log(`   ✨ Created new cluster: ${gptCluster.cluster_id}`);
 }
@@ -224,43 +225,39 @@ async function createNewCluster(
  * - Cluster_Snapshots에 비활성 기록 저장
  */
 async function deactivateMissingClusters(
+  connection: PoolConnection,
   gptClusterIds: Set<string>,
   collectedAt: string
 ): Promise<void> {
-  const clustersCollection = await getClustersCollection();
-  const snapshotsCollection = await getSnapshotsCollection();
+  // Get active clusters that are NOT in gptClusterIds
+  // We can do this by querying DB or filtering the 'existingClusters' we fetched earlier.
+  // Let's use the DB to be safe and consistent within transaction if possible, 
+  // but we need to iterate to insert snapshots.
 
-  const existingClusters = await clustersCollection
-    .find({ status: "active" })
-    .toArray();
+  // Fetch currently active clusters
+  const [activeRows] = await connection.execute<any>(`SELECT * FROM clusters WHERE status = 'active'`);
 
-  for (const cluster of existingClusters) {
+  for (const cluster of activeRows) {
     if (!gptClusterIds.has(cluster.cluster_id)) {
-      // 1. Clusters 테이블 업데이트
-      await clustersCollection.updateOne(
-        { cluster_id: cluster.cluster_id },
-        {
-          $set: {
-            status: "inactive",
-            updated_at: new Date().toISOString(),
-          },
-        }
+      // 1. Update status to inactive
+      await connection.execute(
+        `UPDATE clusters SET status = 'inactive', updated_at = NOW() WHERE cluster_id = ?`,
+        [cluster.cluster_id]
       );
 
-      // 2. Cluster_Snapshots에 비활성 기록 저장
-      const inactiveSnapshot: ClusterSnapshot = {
-        collected_at: collectedAt,
-        cluster_id: cluster.cluster_id,
-        topic_name: cluster.topic_name,
-        tags: cluster.tags,
-        appearance_count: cluster.appearance_count,
-        article_count: 0,
-        article_indices: [], // 빈 배열
-        status: "inactive",
-        cluster_score: 0, // 비활성이므로 점수 0
-      };
-
-      await snapshotsCollection.insertOne(inactiveSnapshot);
+      // 2. Insert inactive snapshot
+      const inactiveSnapshotSql = `
+        INSERT INTO cluster_snapshots 
+        (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, status, cluster_score)
+        VALUES (?, ?, ?, ?, ?, 0, '[]', 'inactive', 0)
+      `;
+      await connection.execute(inactiveSnapshotSql, [
+        collectedAt,
+        cluster.cluster_id,
+        cluster.topic_name,
+        typeof cluster.tags === 'string' ? cluster.tags : JSON.stringify(cluster.tags),
+        cluster.appearance_count
+      ]);
 
       console.log(`   ⛔ Deactivated cluster: ${cluster.cluster_id}`);
     }
@@ -272,26 +269,30 @@ async function deactivateMissingClusters(
  * - 활성 클러스터만 저장
  */
 async function saveClusterSnapshots(
+  connection: PoolConnection,
   gptClusters: GPTClusterOutput[],
   collectedAt: string
 ): Promise<void> {
-  const snapshotsCollection = await getSnapshotsCollection();
+  const sql = `
+    INSERT INTO cluster_snapshots 
+    (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, status, cluster_score)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+  `;
 
-  const snapshots: ClusterSnapshot[] = gptClusters.map((cluster) => ({
-    collected_at: collectedAt,
-    cluster_id: cluster.cluster_id,
-    topic_name: cluster.topic_name,
-    tags: cluster.tags,
-    appearance_count: cluster.appearance_count,
-    article_count: cluster.article_count,
-    article_indices: cluster.article_indices,
-    status: "active",
-    cluster_score: calculateClusterScore(cluster.appearance_count),
-  }));
+  for (const cluster of gptClusters) {
+    await connection.execute(sql, [
+      collectedAt,
+      cluster.cluster_id,
+      cluster.topic_name,
+      JSON.stringify(cluster.tags),
+      cluster.appearance_count,
+      cluster.article_count,
+      JSON.stringify(cluster.article_indices),
+      calculateClusterScore(cluster.appearance_count)
+    ]);
+  }
 
-  await snapshotsCollection.insertMany(snapshots);
-
-  console.log(`   📸 Saved ${snapshots.length} cluster snapshots`);
+  console.log(`   📸 Saved ${gptClusters.length} cluster snapshots`);
 }
 
 // ============ 메인 저장 함수 ============
@@ -308,12 +309,16 @@ async function saveClusterSnapshots(
 async function saveClassificationResultToDB(
   classificationResult: GPTClassificationResult
 ): Promise<void> {
-  console.log("\n========== Saving Classification Results to DB ==========\n");
+  console.log("\n========== Saving Classification Results to DB (MySQL) ==========\n");
 
   const collectedAt = classificationResult.processed_at;
+  const pool = getDatabasePool();
+  const connection = await pool.getConnection();
 
   try {
-    // Step 1: 기존 클러스터 조회
+    await connection.beginTransaction();
+
+    // Step 1: 기존 클러스터 조회 (for logic check)
     console.log("📚 Fetching existing clusters...");
     const existingClusters = await getExistingClusters();
     const clusterMap = createClusterMap(existingClusters);
@@ -332,24 +337,25 @@ async function saveClassificationResultToDB(
 
       if (existingCluster) {
         // 업데이트
-        await updateExistingCluster(existingCluster, gptCluster, collectedAt);
+        await updateExistingCluster(connection, existingCluster, gptCluster, collectedAt);
       } else {
         // 생성
-        await createNewCluster(gptCluster, collectedAt);
+        await createNewCluster(connection, gptCluster, collectedAt);
       }
     }
     console.log("");
 
     // Step 3: 비활성화 처리
     console.log("⛔ Deactivating missing clusters...");
-    await deactivateMissingClusters(gptClusterIds, collectedAt);
+    await deactivateMissingClusters(connection, gptClusterIds, collectedAt);
     console.log("");
 
     // Step 4: Snapshots 저장 (활성 클러스터)
     console.log("📸 Saving cluster snapshots...");
-    await saveClusterSnapshots(classificationResult.clusters, collectedAt);
+    await saveClusterSnapshots(connection, classificationResult.clusters, collectedAt);
     console.log("");
 
+    await connection.commit();
     console.log("✅ DB save completed successfully!\n");
 
     // 통계
@@ -357,17 +363,23 @@ async function saveClassificationResultToDB(
       clusterMap.has(c.cluster_id)
     ).length;
     const createdCount = classificationResult.clusters.length - updatedCount;
-    const deactivatedCount =
-      existingClusters.length - classificationResult.clusters.length;
+
+    // Note: This deactivated count is an approximation based on what we fetched initially.
+    // The actual deactivated count is logged in deactivateMissingClusters.
+    const deactivatedCount = existingClusters.filter(c => c.status === 'active' && !gptClusterIds.has(c.cluster_id)).length;
 
     console.log("📊 Summary:");
     console.log(`   - Updated: ${updatedCount}`);
     console.log(`   - Created: ${createdCount}`);
     console.log(`   - Deactivated: ${deactivatedCount}`);
     console.log(`   - Current active: ${classificationResult.clusters.length}`);
+
   } catch (error) {
+    await connection.rollback();
     console.error("❌ Error saving to DB:", error);
     throw error;
+  } finally {
+    connection.release();
   }
 }
 
@@ -375,10 +387,6 @@ async function saveClassificationResultToDB(
 
 export {
   saveClassificationResultToDB,
-  connectToMongoDB,
-  closeMongoDBConnection,
-  getClustersCollection,
-  getSnapshotsCollection,
   calculateClusterScore,
   ClusterDocument,
   ClusterSnapshot,

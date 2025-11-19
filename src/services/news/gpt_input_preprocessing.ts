@@ -2,10 +2,12 @@
  * GPT 입력 데이터 전처리
  *
  * 프로세스:
- * 1. ElasticSearch에서 최신 1000개 기사 조회
- * 2. MongoDB에서 active 클러스터 + 30일 이내 비활성 클러스터 조회
+ * 1. MySQL news_articles에서 최신 1000개 기사 조회
+ * 2. MySQL clusters에서 active 클러스터 + 30일 이내 비활성 클러스터 조회
  * 3. GPT 입력 형식으로 변환
  */
+
+import { executeQuery } from "../../database/mysql";
 
 // ============ Type 정의 ============
 
@@ -51,35 +53,66 @@ interface GPTInputData {
   previous_clusters: PreviousCluster[];
 }
 
-// ============ ElasticSearch 쿼리 함수 ============
+// ============ MySQL 쿼리 함수 ============
 
 /**
- * ElasticSearch에서 최신 1000개 기사 조회
+ * MySQL에서 최신 1000개 기사 조회
  *
  * @returns 가장 최근 수집된 1000개 기사
  */
-async function getLatestArticlesFromES(): Promise<ArticlesCollection> {
-  // 실제 구현: ElasticSearch 클라이언트 사용
-  // const { Client } = require("@elastic/elasticsearch");
-  // const client = new Client({ node: process.env.ELASTICSEARCH_HOST });
+async function getLatestArticlesFromMySQL(): Promise<ArticlesCollection> {
+  console.log("📰 Fetching latest articles from MySQL...");
 
-  console.log("📰 Fetching latest articles from ElasticSearch...");
+  // 가장 최근 collected_at을 찾아서 그 시간대의 기사들을 가져옴
+  const latestTimeSql = `
+    SELECT collected_at 
+    FROM news_articles 
+    ORDER BY collected_at DESC 
+    LIMIT 1
+  `;
+  const latestTimeRows = await executeQuery<any>(latestTimeSql);
 
-  // TODO: 실제 ElasticSearch 쿼리로 대체
+  if (latestTimeRows.length === 0) {
+    console.log("   ⚠️ No articles found in DB");
+    return {
+      collected_at: new Date().toISOString(),
+      source: "naver",
+      articles: []
+    };
+  }
+
+  const collectedAt = latestTimeRows[0].collected_at;
+
+  // 해당 시간대의 기사 조회 (인덱스 순)
+  const articlesSql = `
+    SELECT article_index, title, link, description, pub_date
+    FROM news_articles
+    WHERE collected_at = ?
+    ORDER BY article_index ASC
+  `;
+
+  const rows = await executeQuery<any>(articlesSql, [collectedAt]);
+
+  const articles: Article[] = rows.map((row: any) => ({
+    index: row.article_index,
+    title: row.title,
+    link: row.link,
+    description: row.description,
+    pubDate: row.pub_date instanceof Date ? row.pub_date.toISOString() : row.pub_date
+  }));
+
   const articlesData: ArticlesCollection = {
-    collected_at: new Date().toISOString(),
-    source: "naver",
-    articles: [
-      // 1000개 기사 배열이 여기 들어갈 예정
-    ],
+    collected_at: collectedAt instanceof Date ? collectedAt.toISOString() : collectedAt,
+    source: "naver", // Defaulting to naver as per schema default
+    articles: articles,
   };
 
-  console.log(`   ✅ Fetched ${articlesData.articles.length} articles`);
+  console.log(`   ✅ Fetched ${articlesData.articles.length} articles from ${articlesData.collected_at}`);
   return articlesData;
 }
 
 /**
- * ElasticSearch에서 1000개 기사가 정확히 있는지 검증
+ * 기사 개수 검증 (1000개)
  */
 function validateArticleCount(articles: Article[]): boolean {
   if (articles.length !== 1000) {
@@ -93,7 +126,7 @@ function validateArticleCount(articles: Article[]): boolean {
 }
 
 /**
- * ElasticSearch에서 기사 인덱스 확인 (0~999가 연속인지)
+ * 기사 인덱스 검증 (0~999 연속)
  */
 function validateArticleIndices(articles: Article[]): boolean {
   for (let i = 0; i < articles.length; i++) {
@@ -108,60 +141,64 @@ function validateArticleIndices(articles: Article[]): boolean {
   return true;
 }
 
-// ============ MongoDB 쿼리 함수 ============
+// ============ 클러스터 조회 함수 ============
 
 /**
- * MongoDB에서 active 클러스터 조회
- *
- * @returns 모든 active 클러스터
+ * MySQL에서 active 클러스터 조회
  */
 async function getActiveClustersFromDB(): Promise<Cluster[]> {
-  // 실제 구현: MongoDB 클라이언트 사용
-  // const db = await connectToMongoDB();
-  // return db.collection("clusters").find({ status: "active" }).toArray();
+  console.log("📚 Fetching active clusters from MySQL...");
 
-  console.log("📚 Fetching active clusters from MongoDB...");
+  const sql = `SELECT * FROM clusters WHERE status = 'active'`;
+  const rows = await executeQuery<any>(sql);
 
-  // TODO: 실제 MongoDB 쿼리로 대체
-  const activeClusters: Cluster[] = [];
+  const clusters: Cluster[] = rows.map((row: any) => ({
+    cluster_id: row.cluster_id,
+    topic_name: row.topic_name,
+    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+    appearance_count: row.appearance_count,
+    status: row.status,
+    history: [], // History not needed for GPT input, saving query cost
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  }));
 
-  console.log(`   ✅ Fetched ${activeClusters.length} active clusters`);
-  return activeClusters;
+  console.log(`   ✅ Fetched ${clusters.length} active clusters`);
+  return clusters;
 }
 
 /**
- * MongoDB에서 30일 이내 비활성 클러스터 조회
- *
- * collected_at 기준으로 30일 이내에 비활성화된 클러스터 조회
- *
- * @returns 30일 이내에 비활성화된 클러스터
+ * MySQL에서 30일 이내 비활성 클러스터 조회
  */
 async function getRecentInactiveClustersFromDB(): Promise<Cluster[]> {
-  console.log("📚 Fetching recent inactive clusters (≤30 days) from MongoDB...");
+  console.log("📚 Fetching recent inactive clusters (≤30 days) from MySQL...");
 
-  // 30일 = 24시간 × 30 = 86400000ms × 30
-  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-  const thirtyDaysAgo = new Date(Date.now() - thirtyDaysMs);
+  const sql = `
+    SELECT * FROM clusters 
+    WHERE status = 'inactive' 
+    AND updated_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+  `;
+  const rows = await executeQuery<any>(sql);
 
-  // 실제 구현: MongoDB 클라이언트 사용
-  // const db = await connectToMongoDB();
-  // return db.collection("clusters").find({
-  //   status: "inactive",
-  //   updated_at: { $gte: thirtyDaysAgo.toISOString() }
-  // }).toArray();
+  const clusters: Cluster[] = rows.map((row: any) => ({
+    cluster_id: row.cluster_id,
+    topic_name: row.topic_name,
+    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags,
+    appearance_count: row.appearance_count,
+    status: row.status,
+    history: [],
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+  }));
 
-  // TODO: 실제 MongoDB 쿼리로 대체
-  const inactiveClusters: Cluster[] = [];
-
-  console.log(`   ✅ Fetched ${inactiveClusters.length} recent inactive clusters`);
-  return inactiveClusters;
+  console.log(`   ✅ Fetched ${clusters.length} recent inactive clusters`);
+  return clusters;
 }
 
 // ============ 전처리 함수 ============
 
 /**
  * Articles 배열을 GPT 입력 형식으로 변환
- * 제목과 인덱스만 추출
  */
 function transformArticlesToGPTFormat(
   articles: Article[]
@@ -174,7 +211,6 @@ function transformArticlesToGPTFormat(
 
 /**
  * Clusters 배열을 GPT 입력 형식으로 변환
- * cluster_id, topic_name, tags, appearance_count, status만 포함
  */
 function transformClustersToGPTFormat(
   clusters: Cluster[]
@@ -204,32 +240,36 @@ function combineClusters(
  * GPT 입력 데이터 전처리
  *
  * 프로세스:
- * 1. ElasticSearch에서 최신 1000개 기사 조회
- * 2. MongoDB에서 active + 30일 이내 비활성 클러스터 조회
+ * 1. MySQL에서 최신 1000개 기사 조회
+ * 2. MySQL에서 active + 30일 이내 비활성 클러스터 조회
  * 3. 검증
  * 4. GPT 입력 형식으로 변환
  *
  * @returns GPT에 전송할 입력 데이터
  */
 async function preprocessGPTInputData(): Promise<GPTInputData> {
-  console.log("\n========== GPT Input Data Preprocessing ==========\n");
+  console.log("\n========== GPT Input Data Preprocessing (MySQL) ==========\n");
 
   try {
-    // Step 1: ElasticSearch에서 기사 조회
+    // Step 1: MySQL에서 기사 조회
     console.log("📰 Step 1: Fetching articles...\n");
-    const articlesCollection = await getLatestArticlesFromES();
+    const articlesCollection = await getLatestArticlesFromMySQL();
     const articles = articlesCollection.articles;
 
     // Step 2: 기사 데이터 검증
     console.log("\n✅ Step 2: Validating article data...\n");
     if (!validateArticleCount(articles)) {
+      // For migration testing, we might not have 1000 articles yet.
+      // Throwing error might block testing. 
+      // However, the requirement is strict. Let's keep it but maybe log warning if < 1000?
+      // The original code threw error. I will keep it consistent.
       throw new Error("Article count validation failed");
     }
     if (!validateArticleIndices(articles)) {
       throw new Error("Article index validation failed");
     }
 
-    // Step 3: MongoDB에서 클러스터 조회
+    // Step 3: MySQL에서 클러스터 조회
     console.log("\n📚 Step 3: Fetching clusters...\n");
     const activeClusters = await getActiveClustersFromDB();
     const inactiveClusters = await getRecentInactiveClustersFromDB();
@@ -273,7 +313,7 @@ export {
   PreviousCluster,
   Article,
   preprocessGPTInputData,
-  getLatestArticlesFromES,
+  getLatestArticlesFromMySQL,
   getActiveClustersFromDB,
   getRecentInactiveClustersFromDB,
   transformArticlesToGPTFormat,
