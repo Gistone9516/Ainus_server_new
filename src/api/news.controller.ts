@@ -13,21 +13,11 @@ import {
   getLatestIssueIndex,
   getIssueIndexByDate,
 } from "../services/news/save-issue-index";
-import { getSnapshotsCollection } from "../services/news/db-save";
+import { getClusterSnapshots, ClusterSnapshot } from "../services/news/db-save";
 import { getArticlesByIndices } from "../database/elasticsearch";
 
 // ============ Type 정의 ============
-
-interface ClusterSnapshot {
-  cluster_id: string;
-  topic_name: string;
-  tags: string[];
-  appearance_count: number;
-  article_count: number;
-  article_indices: number[];
-  status: "active" | "inactive";
-  cluster_score: number;
-}
+// ClusterSnapshot interface is imported from db-save
 
 interface ClustersResponse {
   collected_at: string;
@@ -37,6 +27,25 @@ interface ClustersResponse {
     total_articles: number;
   };
 }
+
+interface ArticlesResponse {
+  collected_at: string;
+  article_count: number;
+  articles: Array<{
+    index: number;
+    title: string;
+    link: string;
+    description: string;
+    pubDate: string;
+  }>;
+}
+
+// ... (keep getCurrentIssueIndex and getHistoryIssueIndex as is, assuming they are correct or will be fixed if needed)
+// Wait, I should only replace the imports and the specific function to avoid overwriting other parts if I use replace_file_content with ranges.
+// But here I am replacing a large chunk. Let's be precise.
+
+// I will use multi_replace_file_content to update imports and the function body.
+
 
 interface ArticlesResponse {
   collected_at: string;
@@ -183,10 +192,7 @@ async function getClustersSnapshot(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    const snapshotsCollection = await getSnapshotsCollection();
-    const clusters = (await snapshotsCollection
-      .find({ collected_at })
-      .toArray()) as ClusterSnapshot[];
+    const clusters = await getClusterSnapshots(collected_at);
 
     if (clusters.length === 0) {
       console.log(

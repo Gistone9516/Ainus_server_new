@@ -16,13 +16,8 @@ import { getDatabasePool } from "./database/mysql";
 import { getRedisCache } from "./database/redis";
 import { Logger } from "./database/logger";
 
-// 뉴스 클러스터링 모듈
-import {
-  getCurrentIssueIndex,
-  getHistoryIssueIndex,
-  getClustersSnapshot,
-  getArticlesOriginal,
-} from "./api/api-endpoints";
+// 뉴스 클러스터링 라우터
+import newsRouter from "./routes/news";
 import { startScheduler } from "./services/news/news-clustering-pipeline";
 import { testElasticsearchConnection } from "./database/elasticsearch";
 
@@ -62,29 +57,9 @@ async function startServer(): Promise<void> {
 
     console.log("\n📋 News Clustering API Routes:");
 
-    /**
-     * 1️⃣ 현재 이슈 지수
-     */
-    app.get("/api/issue-index/current", getCurrentIssueIndex);
-    console.log(`   GET  /api/issue-index/current`);
-
-    /**
-     * 2️⃣ 과거 이슈 지수
-     */
-    app.get("/api/issue-index/history", getHistoryIssueIndex);
-    console.log(`   GET  /api/issue-index/history?date=...`);
-
-    /**
-     * 3️⃣ 클러스터 스냅샷
-     */
-    app.get("/api/issue-index/clusters", getClustersSnapshot);
-    console.log(`   GET  /api/issue-index/clusters?collected_at=...`);
-
-    /**
-     * 4️⃣ 기사 원문
-     */
-    app.get("/api/issue-index/articles", getArticlesOriginal);
-    console.log(`   GET  /api/issue-index/articles?indices=...`);
+    // Mount news router
+    app.use("/api/issue-index", newsRouter);
+    console.log(`   Mounted /api/issue-index routes`);
 
     /**
      * 뉴스 클러스터링 헬스 체크
