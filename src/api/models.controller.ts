@@ -129,7 +129,8 @@ export async function getModelEvaluations(req: Request, res: Response): Promise<
 export async function getModelOverallScores(req: Request, res: Response): Promise<void> {
   try {
     const { model_id } = req.params;
-    const version = req.query.version ? parseInt(req.query.version as string) : undefined;
+    const versionParam = req.query.version as string | undefined;
+    const version = versionParam ? (isNaN(parseInt(versionParam)) ? undefined : parseInt(versionParam)) : undefined;
 
     const scores = await ModelService.getModelOverallScores(model_id, version);
 
@@ -284,6 +285,18 @@ export async function getUpdateById(req: Request, res: Response): Promise<void> 
     const { update_id } = req.params;
     const updateIdNum = parseInt(update_id);
 
+    if (isNaN(updateIdNum)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_PARAMETER',
+          message: `Invalid update_id: ${update_id}. Must be a number.`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     const update = await UpdateService.getUpdateById(updateIdNum);
 
     if (!update) {
@@ -323,6 +336,18 @@ export async function getUpdateDetails(req: Request, res: Response): Promise<voi
   try {
     const { update_id } = req.params;
     const updateIdNum = parseInt(update_id);
+
+    if (isNaN(updateIdNum)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_PARAMETER',
+          message: `Invalid update_id: ${update_id}. Must be a number.`,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     const details = await UpdateService.getUpdateDetails(updateIdNum);
 

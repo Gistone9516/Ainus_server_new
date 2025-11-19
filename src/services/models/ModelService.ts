@@ -37,7 +37,7 @@ export class ModelService {
       const countResult = await executeQuery<{ total: number }>(countSql, [isActive]);
       const total = countResult[0]?.total || 0;
 
-      // 모델 목록 조회
+      // 모델 목록 조회 (JOIN으로 creator_name, creator_slug 포함 - 타입에는 없지만 런타임에는 존재)
       const sql = `
         SELECT
           am.*,
@@ -49,7 +49,7 @@ export class ModelService {
         ORDER BY am.created_at DESC
         LIMIT ? OFFSET ?
       `;
-      const models = await executeQuery<AiModel>(sql, [isActive, limit, offset]);
+      const models = await executeQuery<AiModel & { creator_name?: string; creator_slug?: string }>(sql, [isActive, limit, offset]);
 
       const totalPages = Math.ceil(total / limit);
 
@@ -72,6 +72,7 @@ export class ModelService {
    */
   static async getModelById(modelId: string): Promise<AiModel | null> {
     try {
+      // JOIN으로 creator 정보 포함 (creator_name, creator_slug, website_url, country)
       const sql = `
         SELECT
           am.*,
@@ -83,7 +84,12 @@ export class ModelService {
         INNER JOIN model_creators mc ON am.creator_id = mc.creator_id
         WHERE am.model_id = ?
       `;
-      const result = await executeQuery<AiModel>(sql, [modelId]);
+      const result = await executeQuery<AiModel & { 
+        creator_name?: string; 
+        creator_slug?: string; 
+        website_url?: string; 
+        country?: string; 
+      }>(sql, [modelId]);
 
       return result[0] || null;
     } catch (error) {
@@ -97,6 +103,7 @@ export class ModelService {
    */
   static async getModelBySlug(modelSlug: string): Promise<AiModel | null> {
     try {
+      // JOIN으로 creator 정보 포함 (creator_name, creator_slug)
       const sql = `
         SELECT
           am.*,
@@ -106,7 +113,7 @@ export class ModelService {
         INNER JOIN model_creators mc ON am.creator_id = mc.creator_id
         WHERE am.model_slug = ?
       `;
-      const result = await executeQuery<AiModel>(sql, [modelSlug]);
+      const result = await executeQuery<AiModel & { creator_name?: string; creator_slug?: string }>(sql, [modelSlug]);
 
       return result[0] || null;
     } catch (error) {

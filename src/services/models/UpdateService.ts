@@ -66,7 +66,7 @@ export class UpdateService {
    */
   static async getUpdateById(updateId: number): Promise<ModelUpdateWithDetails | null> {
     try {
-      // 업데이트 기본 정보 조회
+      // 업데이트 기본 정보 조회 (JOIN으로 model_name, model_slug 포함)
       const updateSql = `
         SELECT
           mu.*,
@@ -76,7 +76,7 @@ export class UpdateService {
         INNER JOIN ai_models am ON mu.model_id = am.model_id
         WHERE mu.update_id = ?
       `;
-      const updateResult = await executeQuery<ModelUpdate>(updateSql, [updateId]);
+      const updateResult = await executeQuery<ModelUpdate & { model_name?: string; model_slug?: string }>(updateSql, [updateId]);
 
       if (updateResult.length === 0) {
         return null;
