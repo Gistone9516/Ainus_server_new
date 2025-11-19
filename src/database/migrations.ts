@@ -61,13 +61,15 @@ export async function runMigrations(): Promise<void> {
     await createUserPushNotificationsTable();
     await createFcmTokensTable();
 
-    // 9. 매핑 및 캐시 테이블
+    // 8. 매핑 및 캐시 테이블
     await createJobOccupationToTasksTable();
     await createModelComparisonCacheTable();
 
+    // 9. 커뮤니티 기능 마이그레이션 (Phase 4)
+    await migrateCommunityTables();
+
     // 10. 데이터 수집 로그 테이블
     await createDataCollectionLogsTable();
-
 
     logger.info('Database migrations completed successfully');
   } catch (error) {
@@ -726,4 +728,154 @@ async function createDataCollectionLogsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "data_collection_logs" created');
+}
+
+/**
+ * Phase 4: 커뮤니티 플랫폼 기능 마이그레이션
+ */
+async function migrateCommunityTables(): Promise<void> {
+  logger.info('Starting community platform migrations...');
+
+  // 1. community_posts 테이블 수정
+  await alterCommunityPostsTable();
+
+  // 2. community_comments 테이블 수정
+  await alterCommunityCommentsTable();
+
+  // 3. community_notifications 테이블 생성
+  await createCommunityNotificationsTable();
+
+  logger.info('Community platform migrations completed');
+}
+
+/**
+ * community_posts 테이블에 카테고리 및 소프트 삭제 컬럼 추가
+ */
+async function alterCommunityPostsTable(): Promise<void> {
+  try {
+    // 카테고리 컬럼 추가
+    const addCategorySql = `
+      ALTER TABLE community_posts
+      ADD COLUMN IF NOT EXISTS category ENUM(
+        'prompt_share',
+        'qa',
+        'review',
+        'general',
+        'announcement'
+      ) NOT NULL DEFAULT 'general' AFTER content;
+    `;
+    await executeQuery(addCategorySql);
+
+    // 소프트 삭제 컬럼 추가
+    const addDeletedSql = `
+      ALTER TABLE community_posts
+      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER views_count,
+      ADD COLUMN IF NOT EXISTS deleted_at DATETIME AFTER is_deleted;
+    `;
+    await executeQuery(addDeletedSql);
+
+    // FULLTEXT INDEX 추가 (이미 존재하면 무시)
+    try {
+      const addFulltextSql = `
+        ALTER TABLE community_posts
+        ADD FULLTEXT INDEX idx_fulltext_search (title, content);
+      `;
+      await executeQuery(addFulltextSql);
+    } catch (error: any) {
+      if (!error.message.includes('Duplicate key name')) {
+        throw error;
+      }
+    }
+
+    logger.info('Table "community_posts" altered successfully');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Table "community_posts" already migrated');
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
+ * community_comments 테이블에 대댓글 및 소프트 삭제 컬럼 추가
+ */
+async function alterCommunityCommentsTable(): Promise<void> {
+  try {
+    // parent_comment_id 및 소프트 삭제 컬럼 추가
+    const addColumnsSql = `
+      ALTER TABLE community_comments
+      ADD COLUMN IF NOT EXISTS parent_comment_id INT AFTER post_id,
+      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER likes_count,
+      ADD COLUMN IF NOT EXISTS deleted_at DATETIME AFTER is_deleted;
+    `;
+    await executeQuery(addColumnsSql);
+
+    // 외래키 추가 (이미 존재하면 무시)
+    try {
+      const addFkSql = `
+        ALTER TABLE community_comments
+        ADD CONSTRAINT fk_parent_comment
+        FOREIGN KEY (parent_comment_id) REFERENCES community_comments(comment_id) ON DELETE CASCADE;
+      `;
+      await executeQuery(addFkSql);
+    } catch (error: any) {
+      if (!error.message.includes('Duplicate foreign key')) {
+        // FK 에러는 무시
+      }
+    }
+
+    // 인덱스 추가 (이미 존재하면 무시)
+    try {
+      const addIndexSql = `
+        ALTER TABLE community_comments
+        ADD INDEX idx_parent_comment_id (parent_comment_id);
+      `;
+      await executeQuery(addIndexSql);
+    } catch (error: any) {
+      if (!error.message.includes('Duplicate key name')) {
+        throw error;
+      }
+    }
+
+    logger.info('Table "community_comments" altered successfully');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Table "community_comments" already migrated');
+    } else {
+      throw error;
+    }
+  }
+}
+
+/**
+ * community_notifications 테이블 생성
+ */
+async function createCommunityNotificationsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS community_notifications (
+      notification_id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      actor_id INT,
+      post_id INT,
+      comment_id INT,
+      notification_type ENUM(
+        'post_comment',
+        'comment_reply'
+      ) NOT NULL,
+      content VARCHAR(500),
+      is_read BOOLEAN DEFAULT FALSE,
+      read_at DATETIME,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+      FOREIGN KEY (actor_id) REFERENCES users(user_id) ON DELETE SET NULL,
+      FOREIGN KEY (post_id) REFERENCES community_posts(post_id) ON DELETE CASCADE,
+      FOREIGN KEY (comment_id) REFERENCES community_comments(comment_id) ON DELETE CASCADE,
+      INDEX idx_user_id (user_id),
+      INDEX idx_is_read (is_read),
+      INDEX idx_created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `;
+  await executeQuery(sql);
+  logger.info('Table "community_notifications" created');
 }
