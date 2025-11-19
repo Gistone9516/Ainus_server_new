@@ -44,11 +44,356 @@ export interface PaginatedResponse<T> {
 export interface User {
   user_id: number;
   email: string;
+  password_hash: string;
   nickname: string;
-  profile_image_url?: string;
   job_category_id?: number;
+  profile_image_url?: string;
+  auth_provider?: string;
+  is_active?: boolean;
   created_at: Date;
   updated_at: Date;
+}
+
+/**
+ * 사용자 프로필
+ */
+export interface UserProfile {
+  profile_id: number;
+  user_id: number;
+  job_occupation_id?: number;
+  bio?: string;
+  preferences?: any; // JSON
+  created_at: Date;
+}
+
+/**
+ * 사용자 세션
+ */
+export interface UserSession {
+  session_id: number;
+  user_id: number;
+  token_hash: string;
+  expires_at: Date;
+  created_at: Date;
+}
+
+/**
+ * AI 모델
+ */
+export interface AiModel {
+  model_id: number;
+  model_name: string;
+  series_name?: string;
+  developer?: string;
+  release_date?: string; // DATE type
+  overall_score?: number; // DECIMAL
+  performance_data_ref?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 모델 벤치마크
+ */
+export interface ModelBenchmark {
+  benchmark_id: number;
+  model_id: number;
+  benchmark_name?: string;
+  raw_score?: number;
+  min_val?: number;
+  max_val?: number;
+  normalized_score?: number;
+  collected_at?: Date;
+  created_at: Date;
+}
+
+/**
+ * 모델 업데이트
+ */
+export interface ModelUpdate {
+  update_id: number;
+  model_id: number;
+  version_before?: string;
+  version_after?: string;
+  update_date: string; // DATE
+  summary?: string;
+  key_improvements?: any; // JSON
+  performance_improvement?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 모델 업데이트 상세
+ */
+export interface ModelUpdateDetail {
+  detail_id: number;
+  update_id: number;
+  benchmark_name?: string;
+  before_score?: number;
+  after_score?: number;
+  improvement_pct?: number;
+  created_at: Date;
+}
+
+/**
+ * AI 카테고리
+ */
+export interface AiCategory {
+  category_id: number;
+  category_name: string;
+  category_code: string;
+  description?: string;
+  weight?: number;
+  created_at: Date;
+}
+
+/**
+ * 직업 카테고리
+ */
+export interface JobCategory {
+  job_category_id: number;
+  job_name: string;
+  category_code: string;
+  description?: string;
+  created_at: Date;
+}
+
+/**
+ * 직업군
+ */
+export interface JobOccupation {
+  job_occupation_id: number;
+  job_category_id: number;
+  occupation_name: string;
+  created_at: Date;
+}
+
+/**
+ * 관심 태그
+ */
+export interface InterestTag {
+  interest_tag_id: number;
+  tag_name: string;
+  tag_code: string;
+  category_id?: number;
+  description?: string;
+  created_at: Date;
+}
+
+/**
+ * 일일 이슈 지수
+ */
+export interface IssueIndexDaily {
+  index_id: number;
+  index_date: string; // DATE
+  score?: number;
+  comparison_previous_week?: number;
+  main_keyword?: string;
+  trend?: string;
+  article_count?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 카테고리별 이슈 지수
+ */
+export interface IssueIndexByCategory {
+  category_index_id: number;
+  index_date: string; // DATE
+  category_id: number;
+  score?: number;
+  comparison_previous_week?: number;
+  weight?: number;
+  article_count?: number;
+  created_at: Date;
+}
+
+/**
+ * 뉴스 기사
+ */
+export interface NewsArticle {
+  article_id: number;
+  title: string;
+  url: string;
+  source?: string;
+  published_at?: Date;
+  collected_at?: Date;
+  summary?: string;
+  impact_score?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 기사-태그 매핑
+ */
+export interface ArticleToTag {
+  mapping_id: number;
+  article_id: number;
+  interest_tag_id: number;
+  classification_status?: 'confirmed' | 'pending_review' | 'rejected';
+  confidence_score?: number;
+  created_at: Date;
+}
+
+/**
+ * 커뮤니티 게시글
+ */
+export interface CommunityPost {
+  post_id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  likes_count?: number;
+  comments_count?: number;
+  views_count?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 커뮤니티 댓글
+ */
+export interface CommunityComment {
+  comment_id: number;
+  post_id: number;
+  user_id: number;
+  content: string;
+  likes_count?: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 게시글 좋아요
+ */
+export interface CommunityPostLike {
+  like_id: number;
+  post_id: number;
+  user_id: number;
+  created_at: Date;
+}
+
+/**
+ * 게시글 태그
+ */
+export interface CommunityPostTag {
+  tag_id: number;
+  post_id: number;
+  interest_tag_id: number;
+  created_at: Date;
+}
+
+/**
+ * 사용자 관심 모델
+ */
+export interface UserInterestedModel {
+  interested_id: number;
+  user_id: number;
+  model_id: number;
+  added_at: Date;
+}
+
+/**
+ * FCM 토큰
+ */
+export interface FcmToken {
+  token_id: number;
+  user_id: number;
+  fcm_token: string;
+  device_type?: string;
+  is_active?: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 사용자 푸시 알림
+ */
+export interface UserPushNotification {
+  notification_id: number;
+  user_id: number;
+  model_update_id?: number;
+  issue_index_id?: number;
+  notification_type: 'model_update' | 'issue_alert' | 'digest';
+  title?: string;
+  body?: string;
+  sent_at?: Date;
+  read_at?: Date;
+  created_at: Date;
+}
+
+/**
+ * 직업-태그 매핑
+ */
+export interface JobOccupationToTask {
+  mapping_id: number;
+  job_occupation_id: number;
+  interest_tag_id: number;
+  boost_weight?: number;
+  created_at: Date;
+}
+
+/**
+ * 모델 비교 캐시
+ */
+export interface ModelComparisonCache {
+  cache_id: number;
+  model_id_1: number;
+  model_id_2: number;
+  comparison_data?: any; // JSON
+  cached_at: Date;
+  expires_at?: Date;
+}
+
+/**
+ * 사용자 소셜 계정
+ */
+export interface UserSocialAccount {
+  social_account_id: number;
+  user_id: number;
+  provider: string;
+  provider_user_id: string;
+  provider_email?: string;
+  provider_name?: string;
+  provider_profile_image?: string;
+  access_token_encrypted?: string;
+  refresh_token_encrypted?: string;
+  connected_at: Date;
+  disconnected_at?: Date;
+  last_login_at?: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 비밀번호 재설정 토큰
+ */
+export interface PasswordResetToken {
+  token_id: number;
+  user_id: number;
+  token_hash: string;
+  expires_at: Date;
+  used_at?: Date;
+  created_at: Date;
+}
+
+/**
+ * 로그인 감사 로그
+ */
+export interface LoginAuditLog {
+  log_id: number;
+  user_id?: number;
+  email?: string;
+  status: 'success' | 'failed' | 'blocked';
+  failure_reason?: string;
+  ip_address?: string;
+  user_agent?: string;
+  device_type?: string;
+  location_info?: any; // JSON
+  created_at: Date;
 }
 
 /**

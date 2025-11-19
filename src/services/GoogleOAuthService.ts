@@ -9,6 +9,7 @@ import { getRedisCache } from '../database/redis';
 import { queryOne, executeModify } from '../database/mysql';
 import { generateToken, generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { encrypt, generateRandomToken } from '../utils/encryption';
+import { hashPassword } from '../utils/password';
 import {
   ValidationException,
   DatabaseException,
@@ -164,7 +165,7 @@ export async function googleLogin(
   try {
     // 1단계: 기존 사용자 조회 (provider_user_id로)
     let user: any = await queryOne<any>(
-      'SELECT u.user_id, u.email, u.nickname, u.auth_provider FROM users u ' +
+      'SELECT u.user_id, u.email, u.nickname FROM users u ' +
       'INNER JOIN user_social_accounts s ON u.user_id = s.user_id ' +
       'WHERE s.provider = ? AND s.provider_user_id = ?',
       ['google', googleUserInfo.sub]
@@ -185,17 +186,20 @@ export async function googleLogin(
         user = existingByEmail;
       } else {
         // 완전히 새로운 사용자 생성
+        // 비밀번호는 랜덤 생성 (소셜 로그인 사용자는 비밀번호로 로그인하지 않음)
+        const randomPassword = generateRandomToken(16);
+        const passwordHash = await hashPassword(randomPassword);
+
         const result = await executeModify(
-          `INSERT INTO users (email, nickname, auth_provider, is_active)
-           VALUES (?, ?, ?, ?)`,
-          [googleUserInfo.email, googleUserInfo.name, 'google', true]
+          `INSERT INTO users (email, nickname, password_hash)
+           VALUES (?, ?, ?)`,
+          [googleUserInfo.email, googleUserInfo.name, passwordHash]
         );
 
         user = {
           user_id: result.insertId,
           email: googleUserInfo.email,
-          nickname: googleUserInfo.name,
-          auth_provider: 'google'
+          nickname: googleUserInfo.name
         };
         isNewUser = true;
       }
@@ -260,7 +264,7 @@ export async function googleLogin(
       user_id: user.user_id,
       email: user.email,
       nickname: user.nickname,
-      auth_provider: user.auth_provider,
+      auth_provider: 'google',
       is_new_user: isNewUser,
       tokens: {
         access_token: accessTokenJwt,

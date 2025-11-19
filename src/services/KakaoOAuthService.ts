@@ -9,6 +9,7 @@ import { getRedisCache } from '../database/redis';
 import { queryOne, executeModify } from '../database/mysql';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { encrypt, generateRandomToken } from '../utils/encryption';
+import { hashPassword } from '../utils/password';
 import {
   DatabaseException,
   ExternalAPIException
@@ -171,15 +172,15 @@ export async function kakaoLogin(
     // 사용자 정보 추출
     const kakaoId = String(kakaoUserInfo.id);
     const nickname = kakaoUserInfo.kakao_account?.profile_nickname ||
-                    kakaoUserInfo.properties?.nickname ||
-                    `kakao_${kakaoId.slice(-6)}`;
+      kakaoUserInfo.properties?.nickname ||
+      `kakao_${kakaoId.slice(-6)}`;
     const profileImage = kakaoUserInfo.kakao_account?.profile_image_url ||
-                        kakaoUserInfo.properties?.profile_image;
+      kakaoUserInfo.properties?.profile_image;
     const email = kakaoUserInfo.kakao_account?.email;
 
     // 1단계: 기존 사용자 조회 (provider_user_id로)
     let user: any = await queryOne<any>(
-      'SELECT u.user_id, u.email, u.nickname, u.auth_provider FROM users u ' +
+      'SELECT u.user_id, u.email, u.nickname FROM users u ' +
       'INNER JOIN user_social_accounts s ON u.user_id = s.user_id ' +
       'WHERE s.provider = ? AND s.provider_user_id = ?',
       ['kakao', kakaoId]
@@ -202,17 +203,20 @@ export async function kakaoLogin(
         user = existingByEmail;
       } else {
         // 완전히 새로운 사용자 생성
+        // 비밀번호는 랜덤 생성
+        const randomPassword = generateRandomToken(16);
+        const passwordHash = await hashPassword(randomPassword);
+
         const result = await executeModify(
-          `INSERT INTO users (email, nickname, auth_provider, is_active)
-           VALUES (?, ?, ?, ?)`,
-          [email || null, nickname, 'kakao', true]
+          `INSERT INTO users (email, nickname, password_hash)
+           VALUES (?, ?, ?)`,
+          [email || null, nickname, passwordHash]
         );
 
         user = {
           user_id: result.insertId,
           email: email || null,
-          nickname,
-          auth_provider: 'kakao'
+          nickname
         };
         isNewUser = true;
       }
@@ -277,7 +281,7 @@ export async function kakaoLogin(
       user_id: user.user_id,
       email: user.email,
       nickname: user.nickname,
-      auth_provider: user.auth_provider,
+      auth_provider: 'kakao',
       is_new_user: isNewUser,
       tokens: {
         access_token: accessTokenJwt,

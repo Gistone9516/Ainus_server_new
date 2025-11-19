@@ -9,6 +9,7 @@ import { getRedisCache } from '../database/redis';
 import { queryOne, executeModify } from '../database/mysql';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt';
 import { encrypt, generateRandomToken } from '../utils/encryption';
+import { hashPassword } from '../utils/password';
 import {
   DatabaseException,
   ExternalAPIException
@@ -182,7 +183,7 @@ export async function naverLogin(
 
     // 1단계: 기존 사용자 조회 (provider_user_id로)
     let user: any = await queryOne<any>(
-      'SELECT u.user_id, u.email, u.nickname, u.auth_provider FROM users u ' +
+      'SELECT u.user_id, u.email, u.nickname FROM users u ' +
       'INNER JOIN user_social_accounts s ON u.user_id = s.user_id ' +
       'WHERE s.provider = ? AND s.provider_user_id = ?',
       ['naver', naverId]
@@ -205,17 +206,20 @@ export async function naverLogin(
         user = existingByEmail;
       } else {
         // 완전히 새로운 사용자 생성
+        // 비밀번호는 랜덤 생성
+        const randomPassword = generateRandomToken(16);
+        const passwordHash = await hashPassword(randomPassword);
+
         const result = await executeModify(
-          `INSERT INTO users (email, nickname, auth_provider, is_active)
-           VALUES (?, ?, ?, ?)`,
-          [email || null, nickname, 'naver', true]
+          `INSERT INTO users (email, nickname, password_hash)
+           VALUES (?, ?, ?)`,
+          [email || null, nickname, passwordHash]
         );
 
         user = {
           user_id: result.insertId,
           email: email || null,
-          nickname,
-          auth_provider: 'naver'
+          nickname
         };
         isNewUser = true;
       }
@@ -280,7 +284,7 @@ export async function naverLogin(
       user_id: user.user_id,
       email: user.email,
       nickname: user.nickname,
-      auth_provider: user.auth_provider,
+      auth_provider: 'naver',
       is_new_user: isNewUser,
       tokens: {
         access_token: accessTokenJwt,
