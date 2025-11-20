@@ -43,8 +43,7 @@ export async function runMigrations(): Promise<void> {
     await createClusterSnapshotsTable();
     await createIssueIndexTable();
 
-
-    // 6. 뉴스 및 태그그 테이블
+    // 6. 뉴스 및 태그 테이블
     await createUserInterestTagsTable();
     await createNewsArticlesTable();
     await createArticleToTagsTable();
@@ -456,6 +455,21 @@ async function createIssueIndexTable(): Promise<void> {
 //-- ============================================
 //-- SECTION 6: 뉴스 및 태그
 //-- ============================================
+
+async function createInterestTagsTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS interest_tags (
+  interest_tag_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '태그 ID',
+  tag_name VARCHAR(50) NOT NULL COMMENT '태그명',
+  tag_code VARCHAR(20) UNIQUE NOT NULL COMMENT '태그 코드',
+  description TEXT COMMENT '태그 설명',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+  INDEX idx_tag_code (tag_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `;
+  await executeQuery(sql);
+  logger.info('Table "interest_tags" created');
+}
 
 async function createNewsArticlesTable(): Promise<void> {
   const sql = `
