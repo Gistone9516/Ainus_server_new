@@ -10,6 +10,29 @@ import { RowDataPacket } from 'mysql2';
 
 const logger = new Logger('CommunitySearchService');
 
+type SearchPostRow = RowDataPacket & {
+  post_id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  category: string;
+  likes_count: number;
+  comments_count: number;
+  views_count: number;
+  is_deleted: 0 | 1;
+  deleted_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  author_user_id: number;
+  author_nickname: string;
+  author_profile_image_url: string | null;
+  is_liked?: 0 | 1;
+};
+
+type SearchCountRow = RowDataPacket & {
+  total: number;
+};
+
 export class CommunitySearchService {
   /**
    * 게시물 검색
@@ -21,7 +44,7 @@ export class CommunitySearchService {
     try {
       // 검색어 검증
       if (!query.q || query.q.trim().length === 0) {
-        throw new ValidationException('Search query is required');
+        throw new ValidationException('Search query is required', 'searchPosts');
       }
 
       const page = query.page || 1;
@@ -62,8 +85,8 @@ export class CommunitySearchService {
         FROM community_posts p
         ${whereClause}
       `;
-      const countResult = await executeQuery<RowDataPacket[]>(countSql, params);
-      const total = countResult[0].total;
+      const countResult = await executeQuery<SearchCountRow>(countSql, params);
+      const total = countResult[0]?.total ?? 0;
 
       // 게시물 검색
       const sql = `
@@ -87,7 +110,7 @@ export class CommunitySearchService {
         ? [currentUserId, ...params, limit, offset]
         : [...params, limit, offset];
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, queryParams);
+      const rows = await executeQuery<SearchPostRow>(sql, queryParams);
 
       const items = rows.map((row) => this.mapRowToPost(row));
 
@@ -116,7 +139,7 @@ export class CommunitySearchService {
         WHERE Key_name = 'idx_fulltext_search'
       `;
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, []);
+      const rows = await executeQuery<RowDataPacket>(sql, []);
 
       return rows.length > 0;
     } catch (error) {

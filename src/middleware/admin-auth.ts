@@ -18,11 +18,12 @@ export async function requireAdmin(
     const userId = (req as any).userId;
 
     if (!userId) {
-      return res.status(401).json({
+      res.status(401).json({
         status: 'error',
         message: 'Unauthorized',
         code: 'UNAUTHORIZED',
       });
+      return;
     }
 
     // 환경 변수로 관리자 ID 목록 확인
@@ -37,17 +38,18 @@ export async function requireAdmin(
     }
 
     // DB에서 사용자 정보 확인 (is_admin 컬럼이 있는 경우)
-    const users = await executeQuery<{ is_admin?: boolean }[]>(
+    const users = await executeQuery<{ is_admin?: boolean }>(
       'SELECT 1 FROM users WHERE user_id = ? LIMIT 1',
       [userId]
     );
 
     if (users.length === 0) {
-      return res.status(403).json({
+      res.status(403).json({
         status: 'error',
         message: 'Forbidden - Admin access required',
         code: 'FORBIDDEN',
       });
+      return;
     }
 
     // TODO: users 테이블에 is_admin 또는 role 컬럼 추가 시 체크 로직 활성화
@@ -69,11 +71,12 @@ export async function requireAdmin(
       return;
     }
 
-    return res.status(403).json({
+    res.status(403).json({
       status: 'error',
       message: 'Forbidden - Admin access required',
       code: 'FORBIDDEN',
     });
+    return;
   } catch (error) {
     next(error);
   }

@@ -24,13 +24,13 @@ export async function getPipelineStatus(): Promise<{
   topTags: Array<{ tag_name: string; count: number }>;
 }> {
   // 총 기사 수
-  const totalResult = await executeQuery<{ count: number }[]>(
+  const totalResult = await executeQuery<{ count: number }>(
     'SELECT COUNT(*) as count FROM news_articles'
   );
   const totalArticles = totalResult[0].count;
 
   // 태그된 기사 수 (DISTINCT article_id)
-  const taggedResult = await executeQuery<{ count: number }[]>(
+  const taggedResult = await executeQuery<{ count: number }>(
     'SELECT COUNT(DISTINCT article_id) as count FROM article_to_tags'
   );
   const taggedArticles = taggedResult[0].count;
@@ -40,13 +40,13 @@ export async function getPipelineStatus(): Promise<{
     totalArticles > 0 ? (taggedArticles / totalArticles) * 100 : 0;
 
   // 총 태그 매핑 수
-  const mappingsResult = await executeQuery<{ count: number }[]>(
+  const mappingsResult = await executeQuery<{ count: number }>(
     'SELECT COUNT(*) as count FROM article_to_tags'
   );
   const totalTagMappings = mappingsResult[0].count;
 
   // 마지막 실행 시간 (가장 최근 태그 생성 시간)
-  const lastRunResult = await executeQuery<{ created_at: Date }[]>(
+  const lastRunResult = await executeQuery<{ created_at: Date }>(
     'SELECT created_at FROM article_to_tags ORDER BY created_at DESC LIMIT 1'
   );
   const lastRunAt = lastRunResult[0]?.created_at
@@ -54,7 +54,7 @@ export async function getPipelineStatus(): Promise<{
     : null;
 
   // 상위 10개 태그
-  const topTags = await executeQuery<{ tag_name: string; count: number }[]>(
+  const topTags = await executeQuery<{ tag_name: string; count: number }>(
     `SELECT it.tag_name, COUNT(*) as count
      FROM article_to_tags att
      JOIN interest_tags it ON att.interest_tag_id = it.interest_tag_id
@@ -125,14 +125,14 @@ export async function getUntaggedArticles(params: {
   dataSql += ' ORDER BY na.collected_at DESC, na.article_index ASC LIMIT ? OFFSET ?';
 
   // 총 개수 조회
-  const countResult = await executeQuery<{ count: number }[]>(
+  const countResult = await executeQuery<{ count: number }>(
     countSql,
     params_array
   );
   const total = countResult[0].count;
 
   // 데이터 조회
-  const articles = await executeQuery<NewsArticleFromDB[]>(dataSql, [
+  const articles = await executeQuery<NewsArticleFromDB>(dataSql, [
     ...params_array,
     limit,
     offset,
@@ -165,7 +165,7 @@ export async function getArticleTags(articleId: number): Promise<{
   }>;
 } | null> {
   // 기사 정보 조회
-  const articleResult = await executeQuery<{ article_id: number; title: string }[]>(
+  const articleResult = await executeQuery<{ article_id: number; title: string }>(
     'SELECT article_id, title FROM news_articles WHERE article_id = ?',
     [articleId]
   );
@@ -181,7 +181,7 @@ export async function getArticleTags(articleId: number): Promise<{
       tag_name: string;
       tag_code: string;
       confidence_score: number;
-    }[]
+    }
   >(
     `SELECT
        it.interest_tag_id as tag_id,
@@ -219,7 +219,7 @@ export async function getBatchArticleTags(
       article_id: number;
       tag_name: string;
       confidence_score: number;
-    }[]
+    }
   >(
     `SELECT
        att.article_id,
@@ -297,7 +297,7 @@ export async function getAllTags(category?: string): Promise<{
       tag_code: string;
       description: string;
       article_count: number;
-    }[]
+    }
   >(sql, params);
 
   // 카테고리별 개수 (하드코딩 - 나중에 DB 컬럼 추가 시 수정)
@@ -332,7 +332,7 @@ export async function getTagDetail(tagId: number): Promise<{
       tag_name: string;
       tag_code: string;
       description: string;
-    }[]
+    }
   >(
     'SELECT interest_tag_id as tag_id, tag_name, tag_code, description FROM interest_tags WHERE interest_tag_id = ?',
     [tagId]
@@ -349,7 +349,7 @@ export async function getTagDetail(tagId: number): Promise<{
       avg_confidence: number;
       first_used_at: Date | null;
       last_used_at: Date | null;
-    }[]
+    }
   >(
     `SELECT
        COUNT(*) as article_count,
@@ -417,7 +417,7 @@ export async function getArticlesByTag(params: {
 
   // 태그 정보 조회
   const tagResult = await executeQuery<
-    { tag_id: number; tag_name: string; tag_code: string }[]
+    { tag_id: number; tag_name: string; tag_code: string }
   >(
     'SELECT interest_tag_id as tag_id, tag_name, tag_code FROM interest_tags WHERE interest_tag_id = ?',
     [tagId]
@@ -491,7 +491,7 @@ export async function getArticlesByTag(params: {
   dataSql += ' LIMIT ? OFFSET ?';
 
   // 총 개수 조회
-  const countResult = await executeQuery<{ count: number }[]>(
+  const countResult = await executeQuery<{ count: number }>(
     countSql,
     queryParams
   );
@@ -506,7 +506,7 @@ export async function getArticlesByTag(params: {
       link: string;
       pub_date: Date;
       confidence_score: number;
-    }[]
+    }
   >(dataSql, [...queryParams, limit, offset]);
 
   // 각 기사의 다른 태그 조회
@@ -516,7 +516,7 @@ export async function getArticlesByTag(params: {
   if (articleIds.length > 0) {
     const placeholders = articleIds.map(() => '?').join(',');
     const otherTagsResult = await executeQuery<
-      { article_id: number; tag_name: string }[]
+      { article_id: number; tag_name: string }
     >(
       `SELECT att.article_id, it.tag_name
        FROM article_to_tags att
@@ -610,7 +610,7 @@ export async function getTagDistribution(params: {
       tag_name: string;
       article_count: number;
       avg_confidence: number;
-    }[]
+    }
   >(sql, queryParams);
 
   // 총 기사 수 및 태그 매핑 수
@@ -636,7 +636,7 @@ export async function getTagDistribution(params: {
     }
 
     const totalResult = await executeQuery<
-      { totalArticles: number; totalTagMappings: number }[]
+      { totalArticles: number; totalTagMappings: number }
     >(totalSql, totalParams);
 
     const { totalArticles, totalTagMappings } = totalResult[0];
@@ -658,7 +658,7 @@ export async function getTagDistribution(params: {
     };
   } else {
     const totalResult = await executeQuery<
-      { totalArticles: number; totalTagMappings: number }[]
+      { totalArticles: number; totalTagMappings: number }
     >(totalSql);
 
     const { totalArticles, totalTagMappings } = totalResult[0];

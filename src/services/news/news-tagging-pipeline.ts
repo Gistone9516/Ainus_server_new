@@ -72,7 +72,7 @@ async function fetchUntaggedArticles(
     params.push(limit);
   }
 
-  const articles = await executeQuery<NewsArticleFromDB[]>(sql, params);
+  const articles = await executeQuery<NewsArticleFromDB>(sql, params);
 
   console.log(`   ✅ Found ${articles.length} untagged articles\n`);
 
@@ -106,7 +106,7 @@ async function fetchArticlesByCollectedAt(
     ORDER BY article_index ASC
   `;
 
-  const articles = await executeQuery<NewsArticleFromDB[]>(sql, [
+  const articles = await executeQuery<NewsArticleFromDB>(sql, [
     collectedAt,
   ]);
 

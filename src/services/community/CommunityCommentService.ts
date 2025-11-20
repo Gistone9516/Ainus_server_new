@@ -2,14 +2,43 @@
  * 커뮤니티 댓글 서비스
  */
 
-import { executeQuery } from '@/database/mysql';
+import { executeQuery, executeModify } from '@/database/mysql';
 import { Logger } from '@/database/logger';
 import { CommunityComment, CreateCommentDto } from '@/types/community';
 import { ValidationException, DatabaseException } from '@/exceptions/AgentException';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 import communityNotificationService from './CommunityNotificationService';
 
 const logger = new Logger('CommunityCommentService');
+
+type CommentRow = RowDataPacket & {
+  comment_id: number;
+  post_id: number;
+  user_id: number;
+  parent_comment_id: number | null;
+  content: string;
+  likes_count: number;
+  is_deleted: 0 | 1;
+  deleted_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  author_user_id: number;
+  author_nickname: string;
+  author_profile_image_url: string | null;
+};
+
+type CommentOwnerRow = RowDataPacket & {
+  user_id: number;
+};
+
+type PostRow = RowDataPacket & {
+  post_id: number;
+  user_id?: number;
+};
+
+type CommentIdRow = RowDataPacket & {
+  comment_id: number;
+};
 
 export class CommunityCommentService {
   /**
@@ -20,6 +49,7 @@ export class CommunityCommentService {
     userId: number,
     dto: CreateCommentDto
   ): Promise<CommunityComment> {
+    const methodName = 'createComment';
     try {
       // 입력 검증
       this.validateCreateCommentDto(dto);
@@ -38,7 +68,7 @@ export class CommunityCommentService {
         VALUES (?, ?, ?, ?)
       `;
 
-      const result = await executeQuery<ResultSetHeader>(sql, [
+      const result = await executeModify(sql, [
         postId,
         userId,
         dto.parent_comment_id || null,
@@ -56,7 +86,7 @@ export class CommunityCommentService {
       // 생성된 댓글 조회
       const comment = await this.getCommentById(commentId);
       if (!comment) {
-        throw new DatabaseException('Failed to create comment');
+        throw new DatabaseException('Failed to create comment', methodName);
       }
 
       logger.info(`Comment created: ${commentId} on post ${postId} by user ${userId}`);
@@ -84,7 +114,7 @@ export class CommunityCommentService {
         ORDER BY c.created_at ASC
       `;
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+      const rows = await executeQuery<CommentRow>(sql, [postId]);
 
       // 계층 구조로 변환
       const comments = rows.map((row) => this.mapRowToComment(row));
@@ -111,7 +141,7 @@ export class CommunityCommentService {
         WHERE c.comment_id = ? AND c.is_deleted = FALSE
       `;
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, [commentId]);
+      const rows = await executeQuery<CommentRow>(sql, [commentId]);
 
       if (rows.length === 0) {
         return null;
@@ -162,14 +192,17 @@ export class CommunityCommentService {
       WHERE comment_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [commentId]);
+    const rows = await executeQuery<CommentOwnerRow>(sql, [commentId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Comment not found');
+      throw new ValidationException('Comment not found', 'checkCommentOwnership');
     }
 
     if (rows[0].user_id !== userId) {
-      throw new ValidationException('You are not the author of this comment');
+      throw new ValidationException(
+        'You are not the author of this comment',
+        'checkCommentOwnership'
+      );
     }
   }
 
@@ -182,10 +215,10 @@ export class CommunityCommentService {
       WHERE post_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+    const rows = await executeQuery<PostRow>(sql, [postId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Post not found');
+      throw new ValidationException('Post not found', 'checkPostExists');
     }
   }
 
@@ -198,10 +231,10 @@ export class CommunityCommentService {
       WHERE comment_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [commentId]);
+    const rows = await executeQuery<CommentIdRow>(sql, [commentId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Parent comment not found');
+      throw new ValidationException('Parent comment not found', 'checkCommentExists');
     }
   }
 
@@ -281,13 +314,13 @@ export class CommunityCommentService {
       WHERE post_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+    const rows = await executeQuery<PostRow>(sql, [postId]);
 
     if (rows.length === 0) {
       return null;
     }
 
-    return rows[0].user_id;
+    return rows[0].user_id ?? null;
   }
 
   /**
@@ -298,7 +331,7 @@ export class CommunityCommentService {
       SELECT * FROM community_comments WHERE comment_id = ?
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [commentId]);
+    const rows = await executeQuery<RowDataPacket & { post_id: number }>(sql, [commentId]);
 
     if (rows.length === 0) {
       return null;
@@ -312,7 +345,7 @@ export class CommunityCommentService {
    */
   private validateCreateCommentDto(dto: CreateCommentDto): void {
     if (!dto.content || dto.content.trim().length === 0) {
-      throw new ValidationException('Content is required');
+      throw new ValidationException('Content is required', 'validateCreateCommentDto');
     }
   }
 

@@ -6,9 +6,17 @@ import { executeQuery } from '@/database/mysql';
 import { Logger } from '@/database/logger';
 import { LikeToggleResult } from '@/types/community';
 import { ValidationException } from '@/exceptions/AgentException';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 const logger = new Logger('CommunityLikeService');
+
+type LikesCountRow = RowDataPacket & {
+  likes_count: number;
+};
+
+type PostRow = RowDataPacket & {
+  post_id: number;
+};
 
 export class CommunityLikeService {
   /**
@@ -80,7 +88,7 @@ export class CommunityLikeService {
       WHERE post_id = ? AND user_id = ?
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId, userId]);
+    const rows = await executeQuery<RowDataPacket>(sql, [postId, userId]);
 
     return rows.length > 0;
   }
@@ -120,7 +128,7 @@ export class CommunityLikeService {
       WHERE post_id = ?
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+    const rows = await executeQuery<LikesCountRow>(sql, [postId]);
 
     if (rows.length === 0) {
       return 0;
@@ -138,10 +146,10 @@ export class CommunityLikeService {
       WHERE post_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+    const rows = await executeQuery<PostRow>(sql, [postId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Post not found');
+      throw new ValidationException('Post not found', 'checkPostExists');
     }
   }
 }

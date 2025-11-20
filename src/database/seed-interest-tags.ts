@@ -240,10 +240,10 @@ export async function seedInterestTags(): Promise<void> {
 
   try {
     // 기존 태그 수 확인
-    const existingTags = await executeQuery<{ count: number }[]>(
+    const existingTags = await executeQuery<{ count: number }>(
       'SELECT COUNT(*) as count FROM interest_tags'
     );
-    const existingCount = existingTags[0].count;
+    const existingCount = existingTags[0]?.count ?? 0;
 
     logger.info(`Found ${existingCount} existing tags`);
 
@@ -265,10 +265,10 @@ export async function seedInterestTags(): Promise<void> {
     await executeModify(sql, [values]);
 
     // 최종 태그 수 확인
-    const finalTags = await executeQuery<{ count: number }[]>(
+    const finalTags = await executeQuery<{ count: number }>(
       'SELECT COUNT(*) as count FROM interest_tags'
     );
-    const finalCount = finalTags[0].count;
+    const finalCount = finalTags[0]?.count ?? 0;
 
     logger.info(`Successfully seeded interest tags`);
     logger.info(`  - Expected: ${STANDARD_TAGS.length}`);
@@ -287,7 +287,7 @@ export async function seedInterestTags(): Promise<void> {
  */
 export async function listInterestTags(): Promise<void> {
   try {
-    const tags = await executeQuery<TagData[]>(
+    const tags = await executeQuery<TagData>(
       'SELECT tag_name, tag_code, description FROM interest_tags ORDER BY interest_tag_id ASC'
     );
 

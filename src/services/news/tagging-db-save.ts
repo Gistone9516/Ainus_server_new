@@ -17,7 +17,7 @@ import { SaveTaggingInput, TagMappingInfo } from '@/types/news-tagging';
  */
 async function getTagMapping(): Promise<Map<string, TagMappingInfo>> {
   const tags = await executeQuery<
-    { interest_tag_id: number; tag_name: string; tag_code: string }[]
+    { interest_tag_id: number; tag_name: string; tag_code: string }
   >('SELECT interest_tag_id, tag_name, tag_code FROM interest_tags');
 
   const mapping = new Map<string, TagMappingInfo>();
@@ -150,7 +150,7 @@ export async function getArticleTags(
   `;
 
   const tags = await executeQuery<
-    { tag_name: string; tag_code: string; confidence_score: number }[]
+    { tag_name: string; tag_code: string; confidence_score: number }
   >(sql, [articleId]);
 
   return tags;
@@ -194,7 +194,7 @@ export async function getTaggingStats(collectedAt?: Date): Promise<
   `;
 
   const stats = await executeQuery<
-    { tag_name: string; tag_count: number; avg_confidence: number }[]
+    { tag_name: string; tag_count: number; avg_confidence: number }
   >(sql, params);
 
   return stats;
@@ -213,6 +213,6 @@ export async function getUntaggedArticleCount(): Promise<number> {
     WHERE att.article_id IS NULL
   `;
 
-  const result = await executeQuery<{ count: number }[]>(sql);
+  const result = await executeQuery<{ count: number }>(sql);
   return result[0].count;
 }
