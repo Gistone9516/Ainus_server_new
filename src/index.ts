@@ -19,7 +19,7 @@ import { Logger } from "./database/logger";
 // 뉴스 클러스터링 라우터
 import newsRouter from "./routes/news";
 import { startScheduler } from "./services/news/news-clustering-pipeline";
-import { testElasticsearchConnection } from "./database/elasticsearch";
+import { testMySQLConnection, testRedisConnection } from "./database/articles";
 
 dotenv.config();
 
@@ -80,16 +80,16 @@ async function startServer(): Promise<void> {
       "/health/news-clustering/detailed",
       async (req: Request, res: Response) => {
         try {
-          const esConnected = await testElasticsearchConnection();
+          const mysqlConnected = await testMySQLConnection();
+          const redisConnected = await testRedisConnection();
 
           res.status(200).json({
             status: "ok",
             service: "news-clustering",
             timestamp: new Date().toISOString(),
             services: {
-              elasticsearch: esConnected ? "connected" : "disconnected",
-              mongodb: "configured",
-              mysql: "configured",
+              mysql: mysqlConnected ? "connected" : "disconnected",
+              redis: redisConnected ? "connected" : "disconnected",
             },
           });
         } catch (error) {

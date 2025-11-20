@@ -14,7 +14,7 @@ import {
   getIssueIndexByDate,
 } from "../services/news/save-issue-index";
 import { getClusterSnapshots, ClusterSnapshot } from "../services/news/db-save";
-import { getArticlesByIndices } from "../database/elasticsearch";
+import { getArticlesByIndices } from "../database/articles";
 
 // ============ Type 정의 ============
 // ClusterSnapshot interface is imported from db-save
@@ -288,8 +288,8 @@ async function getArticlesOriginal(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // ElasticSearch에서 기사 조회
-    const articles = await getArticlesByIndices(indexArray);
+    // MySQL에서 기사 조회 (Redis 캐싱 적용)
+    const articles = await getArticlesByIndices(collected_at, indexArray);
 
     if (articles.length === 0) {
       console.log(`   ⚠️ No articles found for indices: ${indices}`);
