@@ -2,7 +2,7 @@
  * 커뮤니티 게시물 서비스
  */
 
-import { executeQuery } from '@/database/mysql';
+import { executeQuery, executeModify } from '@/database/mysql';
 import { Logger } from '@/database/logger';
 import {
   CommunityPost,
@@ -12,15 +12,43 @@ import {
   PaginatedResult,
 } from '@/types/community';
 import { ValidationException, DatabaseException } from '@/exceptions/AgentException';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 const logger = new Logger('CommunityPostService');
+
+type PostRow = RowDataPacket & {
+  post_id: number;
+  user_id: number;
+  title: string;
+  content: string;
+  category: string;
+  likes_count: number;
+  comments_count: number;
+  views_count: number;
+  is_deleted: 0 | 1;
+  deleted_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+  author_user_id: number;
+  author_nickname: string;
+  author_profile_image_url: string | null;
+  is_liked?: 0 | 1;
+};
+
+type CountRow = RowDataPacket & {
+  total: number;
+};
+
+type OwnerRow = RowDataPacket & {
+  user_id: number;
+};
 
 export class CommunityPostService {
   /**
    * 게시물 작성
    */
   async createPost(userId: number, dto: CreatePostDto): Promise<CommunityPost> {
+    const methodName = 'createPost';
     try {
       // 입력 검증
       this.validateCreatePostDto(dto);
@@ -30,7 +58,7 @@ export class CommunityPostService {
         VALUES (?, ?, ?, ?)
       `;
 
-      const result = await executeQuery<ResultSetHeader>(sql, [
+      const result = await executeModify(sql, [
         userId,
         dto.title,
         dto.content,
@@ -42,7 +70,7 @@ export class CommunityPostService {
       // 생성된 게시물 조회
       const post = await this.getPostById(postId, userId);
       if (!post) {
-        throw new DatabaseException('Failed to create post');
+        throw new DatabaseException('Failed to create post', methodName);
       }
 
       logger.info(`Post created: ${postId} by user ${userId}`);
@@ -86,8 +114,8 @@ export class CommunityPostService {
         FROM community_posts p
         ${whereClause}
       `;
-      const countResult = await executeQuery<RowDataPacket[]>(countSql, params);
-      const total = countResult[0].total;
+      const countResult = await executeQuery<CountRow>(countSql, params);
+      const total = countResult[0]?.total ?? 0;
 
       // 게시물 목록 조회
       const sql = `
@@ -111,7 +139,7 @@ export class CommunityPostService {
         ? [currentUserId, ...params, limit, offset]
         : [...params, limit, offset];
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, queryParams);
+      const rows = await executeQuery<PostRow>(sql, queryParams);
 
       const items = rows.map((row) => this.mapRowToPost(row));
 
@@ -149,7 +177,7 @@ export class CommunityPostService {
       `;
 
       const params = currentUserId ? [currentUserId, postId] : [postId];
-      const rows = await executeQuery<RowDataPacket[]>(sql, params);
+      const rows = await executeQuery<PostRow>(sql, params);
 
       if (rows.length === 0) {
         return null;
@@ -190,7 +218,7 @@ export class CommunityPostService {
       }
 
       if (updateFields.length === 0) {
-        throw new ValidationException('No fields to update');
+        throw new ValidationException('No fields to update', 'updatePost');
       }
 
       params.push(postId);
@@ -207,7 +235,7 @@ export class CommunityPostService {
 
       const post = await this.getPostById(postId, userId);
       if (!post) {
-        throw new DatabaseException('Failed to update post');
+        throw new DatabaseException('Failed to update post', 'updatePost');
       }
 
       return post;
@@ -249,14 +277,15 @@ export class CommunityPostService {
       WHERE post_id = ? AND is_deleted = FALSE
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [postId]);
+    const methodName = 'checkPostOwnership';
+    const rows = await executeQuery<OwnerRow>(sql, [postId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Post not found');
+      throw new ValidationException('Post not found', methodName);
     }
 
     if (rows[0].user_id !== userId) {
-      throw new ValidationException('You are not the author of this post');
+      throw new ValidationException('You are not the author of this post', methodName);
     }
   }
 
@@ -278,24 +307,27 @@ export class CommunityPostService {
    */
   private validateCreatePostDto(dto: CreatePostDto): void {
     if (!dto.title || dto.title.trim().length === 0) {
-      throw new ValidationException('Title is required');
+      throw new ValidationException('Title is required', 'validateCreatePostDto');
     }
 
     if (dto.title.length > 255) {
-      throw new ValidationException('Title must be less than 255 characters');
+      throw new ValidationException(
+        'Title must be less than 255 characters',
+        'validateCreatePostDto'
+      );
     }
 
     if (!dto.content || dto.content.trim().length === 0) {
-      throw new ValidationException('Content is required');
+      throw new ValidationException('Content is required', 'validateCreatePostDto');
     }
 
     if (!dto.category) {
-      throw new ValidationException('Category is required');
+      throw new ValidationException('Category is required', 'validateCreatePostDto');
     }
 
     const validCategories = ['prompt_share', 'qa', 'review', 'general', 'announcement'];
     if (!validCategories.includes(dto.category)) {
-      throw new ValidationException('Invalid category');
+      throw new ValidationException('Invalid category', 'validateCreatePostDto');
     }
   }
 

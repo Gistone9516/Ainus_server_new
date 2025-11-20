@@ -11,7 +11,7 @@ import {
   NotificationType,
 } from '@/types/community';
 import { ValidationException } from '@/exceptions/AgentException';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { RowDataPacket } from 'mysql2';
 
 const logger = new Logger('CommunityNotificationService');
 
@@ -22,6 +22,38 @@ interface CreateNotificationDto {
   commentId?: number;
   type: NotificationType;
 }
+
+type NotificationRow = RowDataPacket & {
+  notification_id: number;
+  user_id: number;
+  actor_id: number;
+  post_id: number | null;
+  comment_id: number | null;
+  notification_type: NotificationType;
+  content: string;
+  is_read: 0 | 1;
+  read_at: Date | null;
+  created_at: Date;
+  actor_user_id: number | null;
+  actor_nickname: string | null;
+  actor_profile_image_url: string | null;
+};
+
+type CountRow = RowDataPacket & {
+  total: number;
+};
+
+type UnreadCountRow = RowDataPacket & {
+  count: number;
+};
+
+type NotificationOwnerRow = RowDataPacket & {
+  user_id: number;
+};
+
+type NicknameRow = RowDataPacket & {
+  nickname: string;
+};
 
 export class CommunityNotificationService {
   /**
@@ -80,8 +112,8 @@ export class CommunityNotificationService {
         FROM community_notifications n
         ${whereClause}
       `;
-      const countResult = await executeQuery<RowDataPacket[]>(countSql, params);
-      const total = countResult[0].total;
+      const countResult = await executeQuery<CountRow>(countSql, params);
+      const total = countResult[0]?.total ?? 0;
 
       // 알림 목록 조회
       const sql = `
@@ -97,7 +129,7 @@ export class CommunityNotificationService {
         LIMIT ? OFFSET ?
       `;
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, [...params, limit, offset]);
+      const rows = await executeQuery<NotificationRow>(sql, [...params, limit, offset]);
 
       const items = rows.map((row) => this.mapRowToNotification(row));
 
@@ -168,9 +200,9 @@ export class CommunityNotificationService {
         WHERE user_id = ? AND is_read = FALSE
       `;
 
-      const rows = await executeQuery<RowDataPacket[]>(sql, [userId]);
+      const rows = await executeQuery<UnreadCountRow>(sql, [userId]);
 
-      return rows[0].count;
+      return rows[0]?.count ?? 0;
     } catch (error) {
       logger.error('Failed to get unread count', error);
       throw error;
@@ -186,14 +218,15 @@ export class CommunityNotificationService {
       WHERE notification_id = ?
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [notificationId]);
+    const methodName = 'checkNotificationOwnership';
+    const rows = await executeQuery<NotificationOwnerRow>(sql, [notificationId]);
 
     if (rows.length === 0) {
-      throw new ValidationException('Notification not found');
+      throw new ValidationException('Notification not found', methodName);
     }
 
     if (rows[0].user_id !== userId) {
-      throw new ValidationException('This notification does not belong to you');
+      throw new ValidationException('This notification does not belong to you', methodName);
     }
   }
 
@@ -222,7 +255,7 @@ export class CommunityNotificationService {
       SELECT nickname FROM users WHERE user_id = ?
     `;
 
-    const rows = await executeQuery<RowDataPacket[]>(sql, [userId]);
+    const rows = await executeQuery<NicknameRow>(sql, [userId]);
 
     if (rows.length === 0) {
       return '알 수 없음';
