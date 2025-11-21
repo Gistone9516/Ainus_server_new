@@ -13,6 +13,7 @@ import authRouter from './routes/auth';
 import communityRouter from './routes/community';
 import modelsRouter, { updateRouter, creatorRouter, jobCategoryRouter } from './routes/models';
 import newsTaggingRouter from './routes/news-tagging';
+import tasksRouter from './routes/tasks';
 
 const logger = new Logger('App');
 
@@ -72,6 +73,7 @@ export function createApp(): Express {
   app.use('/api/v1/creators', creatorRouter);
   app.use('/api/v1/job-categories', jobCategoryRouter);
   app.use('/api/v1/news-tagging', newsTaggingRouter);
+  app.use('/api/v1/tasks', tasksRouter);
 
   // 404 핸들러
   app.use((req: Request, res: Response) => {
