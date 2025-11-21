@@ -19,6 +19,9 @@ import {
   getCreators,
   getCreatorById,
   getCreatorModels,
+  // 모델 추천
+  recommendModels,
+  getJobCategories,
 } from '../api/models.controller';
 
 const router = Router();
@@ -31,6 +34,15 @@ const router = Router();
  * Query: page, limit, is_active
  */
 router.get('/', getModels);
+
+/**
+ * GET /api/v1/models/recommend
+ * 직업 기반 모델 추천
+ * Query: job_category_id OR job_category_code, limit (default: 3)
+ *
+ * IMPORTANT: 이 라우트는 /:model_id보다 먼저 정의되어야 합니다!
+ */
+router.get('/recommend', recommendModels);
 
 /**
  * GET /api/v1/models/:model_id
@@ -82,11 +94,12 @@ router.get('/:model_id/updates/:update_id', getUpdateById);
 
 export default router;
 
-// ============ 별도 라우터 (업데이트 상세, 제공사) ============
+// ============ 별도 라우터 (업데이트 상세, 제공사, 직업 카테고리) ============
 // 이 라우트들은 /api/v1에 직접 마운트됩니다
 
 export const updateRouter = Router();
 export const creatorRouter = Router();
+export const jobCategoryRouter = Router();
 
 /**
  * GET /api/v1/updates/:update_id/details
@@ -113,3 +126,9 @@ creatorRouter.get('/:creator_id', getCreatorById);
  * Query: page, limit
  */
 creatorRouter.get('/:creator_id/models', getCreatorModels);
+
+/**
+ * GET /api/v1/job-categories
+ * 직업 카테고리 목록 조회
+ */
+jobCategoryRouter.get('/', getJobCategories);

@@ -5,6 +5,8 @@
 
 import { executeQuery, executeModify } from './mysql';
 import { Logger } from './logger';
+import { seedJobCategories } from './seed-job-categories';
+import { seedInterestTags } from './seed-interest-tags';
 
 const logger = new Logger('Migrations');
 
@@ -71,6 +73,13 @@ export async function runMigrations(): Promise<void> {
     await createDataCollectionLogsTable();
 
     logger.info('Database migrations completed successfully');
+
+    // 11. 시드 데이터 삽입
+    logger.info('Starting seed data insertion...');
+    await seedJobCategories();  // 직업 카테고리 13개
+    await seedInterestTags();   // 관심 태그 40개
+    logger.info('Seed data insertion completed successfully');
+
   } catch (error) {
     logger.error('Database migrations failed', error);
     throw error;

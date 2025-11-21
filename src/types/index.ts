@@ -495,3 +495,49 @@ export interface MethodResult<T = any> {
     error: string;
   }>;
 }
+
+/**
+ * 모델 추천 - 벤치마크 점수 정보
+ */
+export interface BenchmarkScoreInfo {
+  name: string;
+  score: number;
+  weight: number;
+}
+
+/**
+ * 모델 추천 결과
+ */
+export interface ModelRecommendation {
+  rank: number;
+  model_id: string;
+  model_name: string;
+  model_slug: string;
+  creator_name: string;
+  creator_slug: string;
+  weighted_score: number;
+  benchmark_scores: {
+    primary: BenchmarkScoreInfo;
+    secondary: BenchmarkScoreInfo;
+  };
+}
+
+/**
+ * 추천 응답 전체 구조
+ */
+export interface RecommendationResponse {
+  job_category: {
+    job_category_id: number;
+    job_name: string;
+    category_code: string;
+  };
+  criteria: {
+    primary_benchmark: string;
+    secondary_benchmark: string;
+    weights: {
+      primary: number;
+      secondary: number;
+    };
+  };
+  recommended_models: ModelRecommendation[];
+}
