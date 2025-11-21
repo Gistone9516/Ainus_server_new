@@ -11,7 +11,7 @@ import { Logger } from './database/logger';
 import { v4 as uuidv4 } from 'uuid';
 import authRouter from './routes/auth';
 import communityRouter from './routes/community';
-import modelsRouter, { updateRouter, creatorRouter } from './routes/models';
+import modelsRouter, { updateRouter, creatorRouter, jobCategoryRouter } from './routes/models';
 import newsTaggingRouter from './routes/news-tagging';
 
 const logger = new Logger('App');
@@ -70,6 +70,7 @@ export function createApp(): Express {
   app.use('/api/v1/models', modelsRouter);
   app.use('/api/v1/updates', updateRouter);
   app.use('/api/v1/creators', creatorRouter);
+  app.use('/api/v1/job-categories', jobCategoryRouter);
   app.use('/api/v1/news-tagging', newsTaggingRouter);
 
   // 404 핸들러

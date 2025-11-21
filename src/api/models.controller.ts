@@ -14,12 +14,15 @@
  * - GET /api/v1/creators - 제공사 목록
  * - GET /api/v1/creators/:creator_id - 제공사 상세
  * - GET /api/v1/creators/:creator_id/models - 제공사의 모델들
+ * - GET /api/v1/models/recommend - 직업 기반 모델 추천
+ * - GET /api/v1/job-categories - 직업 카테고리 목록
  */
 
 import { Request, Response } from 'express';
 import { ModelService } from '../services/models/ModelService';
 import { CreatorService } from '../services/models/CreatorService';
 import { UpdateService } from '../services/models/UpdateService';
+import { RecommendationService } from '../services/models/RecommendationService';
 
 // ============ 모델 정보 API ============
 
@@ -457,6 +460,123 @@ export async function getCreatorModels(req: Request, res: Response): Promise<voi
     res.status(200).json({
       success: true,
       data: result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+// ============ 모델 추천 API ============
+
+/**
+ * GET /api/v1/models/recommend
+ * 직업 기반 모델 추천
+ *
+ * Query Parameters:
+ * - job_category_id: 직업 카테고리 ID (number)
+ * - job_category_code: 직업 카테고리 코드 (string)
+ * - limit: 추천 모델 개수 (default: 3)
+ *
+ * 둘 중 하나는 필수입니다.
+ */
+export async function recommendModels(req: Request, res: Response): Promise<void> {
+  try {
+    const { job_category_id, job_category_code, limit } = req.query;
+    const limitNum = parseInt(limit as string) || 3;
+
+    // 파라미터 검증
+    if (!job_category_id && !job_category_code) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'MISSING_PARAMETER',
+          message: 'Either job_category_id or job_category_code is required',
+        },
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // ID로 추천
+    if (job_category_id) {
+      const categoryId = parseInt(job_category_id as string);
+
+      if (isNaN(categoryId)) {
+        res.status(400).json({
+          success: false,
+          error: {
+            code: 'INVALID_PARAMETER',
+            message: `Invalid job_category_id: ${job_category_id}. Must be a number.`,
+          },
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const result = await RecommendationService.recommendByJobCategoryId(categoryId, limitNum);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    // 코드로 추천
+    if (job_category_code) {
+      const result = await RecommendationService.recommendByJobCategoryCode(
+        job_category_code as string,
+        limitNum
+      );
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const statusCode = errorMessage.includes('not found') ? 404 : 500;
+    const errorCode = errorMessage.includes('not found')
+      ? 'RESOURCE_NOT_FOUND'
+      : 'INTERNAL_SERVER_ERROR';
+
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        code: errorCode,
+        message: errorMessage,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+
+/**
+ * GET /api/v1/job-categories
+ * 직업 카테고리 목록 조회
+ */
+export async function getJobCategories(req: Request, res: Response): Promise<void> {
+  try {
+    const categories = await RecommendationService.getAllJobCategories();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        categories,
+        total: categories.length,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
