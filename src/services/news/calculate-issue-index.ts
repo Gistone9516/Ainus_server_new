@@ -5,7 +5,7 @@
  * 1. 비활성_점수 = 클러스터_점수 × e^(-0.1 × 비활성_경과일수)
  * 2. 활성_평균 = Σ(활성 점수) / 활성 수
  * 3. 비활성_평균 = Σ(비활성_점수) / 30일 이내 비활성 수
- * 4. 통합 지수 = (활성_평균 × 0.7) + (비활성_평균 × 0.3)
+ * 4. 통합 지수 = (활성_평균 × 1.0) + (비활성_평균 × 0.5)
  */
 
 // ============ Type 정의 ============
@@ -117,8 +117,8 @@ function calculateOverallIndex(
   activeAverage: number,
   inactiveAverage: number
 ): number {
-  // 통합 지수 = (활성_평균 × 0.7) + (비활성_평균 × 0.3)
-  return activeAverage * 0.7 + inactiveAverage * 0.3;
+  // 통합 지수 = (활성_평균 × 1.0) + (비활성_평균 × 0.5)
+  return activeAverage * 1.0 + inactiveAverage * 0.5;
 }
 
 // ============ 메인 함수 ============
@@ -171,7 +171,7 @@ function calculateIssueIndex(input: IssueIndexInput): IssueIndexOutput {
   console.log("\n📊 Step 3: Calculating final integrated index...");
   const overallIndex = calculateOverallIndex(activeAverage, inactiveAverage);
   console.log(`   ✅ Overall Index: ${overallIndex.toFixed(1)}`);
-  console.log(`   📐 Formula: (${activeAverage.toFixed(2)} × 0.7) + (${inactiveAverage.toFixed(2)} × 0.3)`);
+  console.log(`   📐 Formula: (${activeAverage.toFixed(2)} × 1.0) + (${inactiveAverage.toFixed(2)} × 0.5)`);
 
   console.log("\n========== Issue Index Calculation Complete ==========\n");
 

@@ -5,8 +5,8 @@
  * 1. 전처리 (MySQL에서 기사/클러스터 조회 -> GPT 입력 생성)
  * 2. GPT 분류 (OpenAI API 호출)
  * 3. DB 저장 (MySQL에 결과 저장)
- * 4. 이슈 지수 계산 (MySQL 데이터 기반 계산)
- * 5. 이슈 지수 저장 (MySQL issue_index 테이블에 저장)
+ * 4. 통합 이슈 지수 계산 & 저장 (MySQL 데이터 기반)
+ * 5. 직업별 이슈 지수 계산 & 저장 (13개 직업)
  */
 
 import cron from "node-cron";
@@ -28,6 +28,8 @@ import {
   IssueIndexOutput
 } from "./calculate-issue-index";
 import { saveIssueIndexToMySQL } from "./save-issue-index";
+import { calculateAllJobIssueIndexes } from "./calculate-job-issue-index";
+import { saveAllJobIssueIndexes } from "./save-job-issue-index";
 
 // ============ 설정 ============
 
@@ -105,25 +107,25 @@ async function executePipelineWithRetry(
 
   try {
     // ========== Step 1: 전처리 ==========
-    console.log("📋 [Step 1/4] Data Preprocessing...\n");
+    console.log("📋 [Step 1/5] Data Preprocessing...\n");
 
     const gptInput = await preprocessGPTInputData();
     console.log(`✅ Preprocessing complete\n`);
 
     // ========== Step 2: GPT 분류 ==========
-    console.log("🤖 [Step 2/4] GPT Classification...\n");
+    console.log("🤖 [Step 2/5] GPT Classification...\n");
 
     const classificationResult = await classifyNewsWithGPT(gptInput);
     console.log(`✅ Classification complete\n`);
 
     // ========== Step 3: DB 저장 ==========
-    console.log("💾 [Step 3/4] Saving to Databases...\n");
+    console.log("💾 [Step 3/5] Saving to Databases...\n");
 
     await saveClassificationResultToDB(classificationResult);
     console.log(`✅ DB save complete\n`);
 
-    // ========== Step 4: 이슈 지수 계산 & 저장 ==========
-    console.log("📊 [Step 4/4] Calculating Issue Index...\n");
+    // ========== Step 4: 통합 이슈 지수 계산 & 저장 ==========
+    console.log("📊 [Step 4/5] Calculating Overall Issue Index...\n");
 
     // DB 상태가 업데이트되었으므로 다시 조회하여 최신 상태 반영
     const activeClusters = await getActiveClustersFromDB();
@@ -144,7 +146,14 @@ async function executePipelineWithRetry(
       inactive_clusters_count: issueIndexOutput.inactive_count,
       total_articles_analyzed: gptInput.new_articles.length // 이번에 분석한 기사 수
     });
-    console.log(`✅ Issue index calculation complete\n`);
+    console.log(`✅ Overall issue index complete\n`);
+
+    // ========== Step 5: 직업별 이슈 지수 계산 & 저장 ==========
+    console.log("👔 [Step 5/5] Calculating Job-Specific Issue Indexes (13 jobs)...\n");
+
+    const jobIssueIndexes = await calculateAllJobIssueIndexes(issueIndexOutput.collected_at);
+    await saveAllJobIssueIndexes(jobIssueIndexes);
+    console.log(`✅ Job-specific issue indexes complete (${jobIssueIndexes.length} jobs)\n`);
 
     const duration = Date.now() - startTime;
 

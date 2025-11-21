@@ -44,6 +44,8 @@ export async function runMigrations(): Promise<void> {
     await createClusterHistoryTable();
     await createClusterSnapshotsTable();
     await createIssueIndexTable();
+    await createJobIssueIndexTable();
+    await createJobClusterMappingTable();
 
     // 6. 뉴스 및 태그 테이블
     await createUserInterestTagsTable();
@@ -458,6 +460,45 @@ async function createIssueIndexTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "issue_index" created');
+}
+
+async function createJobIssueIndexTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS job_issue_index (
+      job_category VARCHAR(50) NOT NULL COMMENT '직업 카테고리',
+      collected_at DATETIME NOT NULL COMMENT '수집 시간 (1시간 단위)',
+      issue_index DECIMAL(5,1) NOT NULL COMMENT '직업별 이슈 지수 (0-100)',
+      active_clusters_count INT NOT NULL COMMENT '활성 클러스터 개수',
+      inactive_clusters_count INT NOT NULL COMMENT '비활성 클러스터 개수',
+      total_articles_count INT NOT NULL COMMENT '총 매칭 기사 개수',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+      PRIMARY KEY (job_category, collected_at),
+      INDEX idx_job_collected (job_category, collected_at DESC),
+      INDEX idx_issue_index (issue_index DESC)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `;
+  await executeQuery(sql);
+  logger.info('Table "job_issue_index" created');
+}
+
+async function createJobClusterMappingTable(): Promise<void> {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS job_cluster_mapping (
+      job_category VARCHAR(50) NOT NULL COMMENT '직업 카테고리',
+      collected_at DATETIME NOT NULL COMMENT '수집 시간 (1시간 단위)',
+      cluster_id VARCHAR(50) NOT NULL COMMENT '클러스터 ID',
+      match_ratio DECIMAL(5,3) NOT NULL COMMENT '태그 매칭 비율 (0.000-1.000)',
+      weighted_score DECIMAL(5,2) NOT NULL COMMENT '가중 점수 (cluster_score × match_ratio)',
+      PRIMARY KEY (job_category, collected_at, cluster_id),
+      INDEX idx_job_collected (job_category, collected_at),
+      INDEX idx_weighted_score (weighted_score DESC),
+      FOREIGN KEY (job_category, collected_at)
+        REFERENCES job_issue_index(job_category, collected_at)
+        ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `;
+  await executeQuery(sql);
+  logger.info('Table "job_cluster_mapping" created');
 }
 
 
