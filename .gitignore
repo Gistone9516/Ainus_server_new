@@ -38,3 +38,6 @@ temp/
 
 # OS
 Thumbs.db
+
+# api data
+data/

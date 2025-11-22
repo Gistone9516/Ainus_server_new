@@ -12,7 +12,9 @@
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts",
-    "pipeline:aa": "ts-node src/pipelines/artificialAnalysisPipeline.ts"
+    "pipeline:aa": "ts-node src/pipelines/artificialAnalysisPipeline.ts",
+    "collect:naver": "ts-node src/pipelines/naverNewsPipeline.ts",
+    "collect:naver:test": "ts-node src/pipelines/naverNewsPipeline.ts test"
   },
   "keywords": [
     "ai",
