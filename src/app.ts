@@ -16,6 +16,8 @@ import newsTaggingRouter from './routes/news-tagging';
 import tasksRouter from './routes/tasks';
 import newsRouter from './routes/news';
 import jobNewsRouter from './routes/job-news';
+import comparisonRouter from './routes/comparison.routes';
+import timelineRouter from './routes/timeline.routes';
 
 const logger = new Logger('App');
 
@@ -78,6 +80,8 @@ export function createApp(): Express {
   app.use('/api/v1/tasks', tasksRouter);
   app.use('/api/issue-index', newsRouter);
   app.use('/api/issue-index', jobNewsRouter);
+  app.use('/api/v1/comparison', comparisonRouter); 
+  app.use('/api/v1/timeline', timelineRouter);
 
   // 404 핸들러
   app.use((req: Request, res: Response) => {
