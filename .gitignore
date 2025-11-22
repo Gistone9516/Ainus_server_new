@@ -38,3 +38,9 @@ temp/
 
 # OS
 Thumbs.db
+
+# api data
+data/
+
+# test 
+src/test/
