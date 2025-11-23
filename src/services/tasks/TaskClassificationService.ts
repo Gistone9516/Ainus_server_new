@@ -14,7 +14,7 @@ import {
   GPTClassificationRawResponse,
   TaskClassificationResult,
 } from '@/types/task.types';
-import { taskRepository } from '@/services/repositories/taskRepository';
+import { taskRepository } from '../repositories/taskRepository';
 
 // ============ 설정 ============
 

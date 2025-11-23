@@ -36,7 +36,7 @@ router.get('/:series', async (req: Request, res: Response) => {
 
     const timeline = await getModelTimeline(series, limit);
 
-    res.json({
+    return res.json({
       success: true,
       data: timeline
     });
@@ -51,7 +51,7 @@ router.get('/:series', async (req: Request, res: Response) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '타임라인 조회 중 오류가 발생했습니다',
       details: error.message
@@ -96,7 +96,7 @@ router.get('/compare', async (req: Request, res: Response) => {
 
     const comparison = await compareModelTimelines(seriesNames);
 
-    res.json({
+    return res.json({
       success: true,
       data: comparison
     });
@@ -104,7 +104,7 @@ router.get('/compare', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('타임라인 비교 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '타임라인 비교 중 오류가 발생했습니다',
       details: error.message
@@ -152,7 +152,7 @@ router.get('/events', async (req: Request, res: Response) => {
 
     const events = await getMajorReleaseEvents(startDate, endDate);
 
-    res.json({
+    return res.json({
       success: true,
       count: events.length,
       data: events
@@ -161,7 +161,7 @@ router.get('/events', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('출시 이벤트 조회 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '출시 이벤트 조회 중 오류가 발생했습니다',
       details: error.message
@@ -190,7 +190,7 @@ router.get('/benchmark/:series/:benchmark', async (req: Request, res: Response) 
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: progression
     });
@@ -198,7 +198,7 @@ router.get('/benchmark/:series/:benchmark', async (req: Request, res: Response) 
   } catch (error: any) {
     console.error('벤치마크 발전 추이 조회 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '벤치마크 발전 추이 조회 중 오류가 발생했습니다',
       details: error.message
@@ -214,7 +214,7 @@ router.get('/series', async (req: Request, res: Response) => {
   try {
     const series = await getAvailableSeries();
 
-    res.json({
+    return res.json({
       success: true,
       count: series.length,
       data: series
@@ -223,7 +223,7 @@ router.get('/series', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('시리즈 목록 조회 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '시리즈 목록 조회 중 오류가 발생했습니다',
       details: error.message

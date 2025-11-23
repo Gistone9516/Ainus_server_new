@@ -25,6 +25,9 @@ export function createApp(): Express {
   const app = express();
   const config = getConfig();
 
+  // Trust proxy 설정 (프록시 뒤에서 실행 시 IP 주소 제대로 추출)
+  app.set('trust proxy', true);
+
   // 요청 본문 파싱
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));

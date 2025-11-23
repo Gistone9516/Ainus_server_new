@@ -56,7 +56,7 @@ router.get('/compare', async (req: Request, res: Response) => {
     // 비교 실행
     const comparison = await compareModels(modelA, modelB);
 
-    res.json({
+    return res.json({
       success: true,
       data: comparison
     });
@@ -71,7 +71,7 @@ router.get('/compare', async (req: Request, res: Response) => {
       });
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '모델 비교 중 오류가 발생했습니다',
       details: error.message
@@ -127,7 +127,7 @@ router.get('/top/:category', async (req: Request, res: Response) => {
       limit
     );
 
-    res.json({
+    return res.json({
       success: true,
       category,
       count: topModels.length,
@@ -137,7 +137,7 @@ router.get('/top/:category', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('상위 모델 조회 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '상위 모델 조회 중 오류가 발생했습니다',
       details: error.message
@@ -168,15 +168,20 @@ router.get('/quick-compare', async (req: Request, res: Response) => {
     }
 
     // 모델명으로 ID 검색
-    const { mysqlPool } = await import('../config/database');
+    const { executeQuery } = await import('../database/mysql');
     
-    const [modelsA] = await mysqlPool.query<any[]>(
+    interface ModelRow {
+      model_id: string;
+      model_name: string;
+    }
+    
+    const modelsA = await executeQuery<ModelRow>(
       `SELECT model_id, model_name FROM ai_models 
        WHERE model_name LIKE ? AND is_active = TRUE LIMIT 1`,
       [`%${nameA}%`]
     );
 
-    const [modelsB] = await mysqlPool.query<any[]>(
+    const modelsB = await executeQuery<ModelRow>(
       `SELECT model_id, model_name FROM ai_models 
        WHERE model_name LIKE ? AND is_active = TRUE LIMIT 1`,
       [`%${nameB}%`]
@@ -199,7 +204,7 @@ router.get('/quick-compare', async (req: Request, res: Response) => {
     // 비교 실행
     const comparison = await compareModels(modelsA[0].model_id, modelsB[0].model_id);
 
-    res.json({
+    return res.json({
       success: true,
       matched: {
         model_a: modelsA[0].model_name,
@@ -211,7 +216,7 @@ router.get('/quick-compare', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('간편 비교 오류:', error);
     
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: '간편 비교 중 오류가 발생했습니다',
       details: error.message

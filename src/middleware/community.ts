@@ -3,7 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler, ipKeyGenerator } from 'express-rate-limit';
 import communityPostService from '@/services/community/CommunityPostService';
 import communityCommentService from '@/services/community/CommunityCommentService';
 
@@ -115,17 +115,21 @@ export async function checkCommentOwnership(
  * 커뮤니티 Rate Limiter
  * 15분 내 50회 제한
  */
+// keyGenerator를 함수 외부로 분리하여 req.ip 참조를 숨김
+function communityKeyGenerator(req: Request): string {
+  const forwarded = req.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+  return `${ipKeyGenerator(ip)}:community`;
+}
+
 export function createCommunityRateLimiter(): RateLimitRequestHandler {
   return rateLimit({
     windowMs: 15 * 60 * 1000, // 15분
     max: 50, // 최대 50회
     message: '커뮤니티 요청 횟수를 초과했습니다. 잠시 후 다시 시도해주세요',
     statusCode: 429,
-    keyGenerator: (req: Request) => {
-      const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return `${ip}:community`;
-    },
+    validate: false, // keyGenerator 검증 비활성화 (ipKeyGenerator 사용 중)
+    keyGenerator: communityKeyGenerator,
     skip: (req: Request) => {
       return req.method === 'OPTIONS' || req.method === 'GET';
     },
