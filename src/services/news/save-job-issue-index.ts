@@ -8,7 +8,7 @@
  * 트랜잭션으로 데이터 무결성 보장
  */
 
-import { getConnection } from '../../database/mysql';
+import { getDatabasePool } from '../../database/mysql';
 import { Logger } from '../../database/logger';
 import { PoolConnection, RowDataPacket } from 'mysql2/promise';
 
@@ -167,7 +167,7 @@ async function saveJobClusterMappings(
 export async function saveSingleJobIssueIndex(
   result: JobIssueIndexResult
 ): Promise<void> {
-  const connection = await getConnection();
+  const connection = await getDatabasePool().getConnection();
 
   try {
     await connection.beginTransaction();
