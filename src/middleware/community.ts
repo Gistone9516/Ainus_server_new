@@ -3,7 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler, ipKeyGenerator } from 'express-rate-limit';
 import communityPostService from '@/services/community/CommunityPostService';
 import communityCommentService from '@/services/community/CommunityCommentService';
 
@@ -123,8 +123,9 @@ export function createCommunityRateLimiter(): RateLimitRequestHandler {
     statusCode: 429,
     keyGenerator: (req: Request) => {
       const forwarded = req.get('x-forwarded-for');
-      const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
-      return `${ip}:community`;
+      const rawIp = forwarded ? forwarded.split(',')[0].trim() : req.ip || 'unknown';
+      const normalizedIp = ipKeyGenerator(rawIp);
+      return `${normalizedIp}:community`;
     },
     skip: (req: Request) => {
       return req.method === 'OPTIONS' || req.method === 'GET';

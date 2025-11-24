@@ -7,6 +7,12 @@
 
 import { Router, Request, Response } from 'express';
 import { compareModels, getTopModelsByCategory } from '../services/comparison/modelComparisonService';
+import { executeQuery } from '../database/mysql';
+
+type ModelLookupRow = {
+  model_id: string;
+  model_name: string;
+};
 
 const router = Router();
 
@@ -26,31 +32,34 @@ const router = Router();
  *   visual_data: {...}
  * }
  */
-router.get('/compare', async (req: Request, res: Response) => {
+router.get('/compare', async (req: Request, res: Response): Promise<void> => {
   try {
     const { modelA, modelB } = req.query;
 
     // 파라미터 검증
     if (!modelA || !modelB) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'modelA와 modelB 파라미터가 필요합니다',
         example: '/api/comparison/compare?modelA=xxx&modelB=yyy'
       });
+      return;
     }
 
     if (typeof modelA !== 'string' || typeof modelB !== 'string') {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'modelA와 modelB는 문자열이어야 합니다'
       });
+      return;
     }
 
     if (modelA === modelB) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: '동일한 모델을 비교할 수 없습니다'
       });
+      return;
     }
 
     // 비교 실행
@@ -60,15 +69,17 @@ router.get('/compare', async (req: Request, res: Response) => {
       success: true,
       data: comparison
     });
+    return;
 
   } catch (error: any) {
     console.error('모델 비교 오류:', error);
     
-    if (error.message.includes('찾을 수 없습니다')) {
-      return res.status(404).json({
+    if (typeof error.message === 'string' && error.message.includes('찾을 수 없습니다')) {
+      res.status(404).json({
         success: false,
         error: error.message
       });
+      return;
     }
 
     res.status(500).json({
@@ -76,6 +87,7 @@ router.get('/compare', async (req: Request, res: Response) => {
       error: '모델 비교 중 오류가 발생했습니다',
       details: error.message
     });
+    return;
   }
 });
 
@@ -106,19 +118,22 @@ router.get('/compare', async (req: Request, res: Response) => {
  *   ]
  * }
  */
-router.get('/top/:category', async (req: Request, res: Response) => {
+router.get('/top/:category', async (req: Request, res: Response): Promise<void> => {
   try {
     const { category } = req.params;
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const parsedLimit = limitParam ? parseInt(limitParam as string, 10) : 10;
+    const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 10 : parsedLimit, 50));
 
     // 카테고리 검증
     const validCategories = ['overall', 'intelligence', 'coding', 'math'];
     if (!validCategories.includes(category)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: `유효하지 않은 카테고리입니다. 사용 가능: ${validCategories.join(', ')}`,
         valid_categories: validCategories
       });
+      return;
     }
 
     // 상위 모델 조회
@@ -133,6 +148,7 @@ router.get('/top/:category', async (req: Request, res: Response) => {
       count: topModels.length,
       data: topModels
     });
+    return;
 
   } catch (error: any) {
     console.error('상위 모델 조회 오류:', error);
@@ -142,6 +158,7 @@ router.get('/top/:category', async (req: Request, res: Response) => {
       error: '상위 모델 조회 중 오류가 발생했습니다',
       details: error.message
     });
+    return;
   }
 });
 
@@ -155,45 +172,54 @@ router.get('/top/:category', async (req: Request, res: Response) => {
  * 
  * Response: compare와 동일
  */
-router.get('/quick-compare', async (req: Request, res: Response) => {
+router.get('/quick-compare', async (req: Request, res: Response): Promise<void> => {
   try {
     const { nameA, nameB } = req.query;
 
     if (!nameA || !nameB) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'nameA와 nameB 파라미터가 필요합니다',
         example: '/api/comparison/quick-compare?nameA=GPT-4&nameB=Claude'
       });
+      return;
+    }
+
+    if (typeof nameA !== 'string' || typeof nameB !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: 'nameA와 nameB는 문자열이어야 합니다'
+      });
+      return;
     }
 
     // 모델명으로 ID 검색
-    const { mysqlPool } = await import('../config/database');
-    
-    const [modelsA] = await mysqlPool.query<any[]>(
+    const modelsA = await executeQuery<ModelLookupRow>(
       `SELECT model_id, model_name FROM ai_models 
        WHERE model_name LIKE ? AND is_active = TRUE LIMIT 1`,
       [`%${nameA}%`]
     );
 
-    const [modelsB] = await mysqlPool.query<any[]>(
+    const modelsB = await executeQuery<ModelLookupRow>(
       `SELECT model_id, model_name FROM ai_models 
        WHERE model_name LIKE ? AND is_active = TRUE LIMIT 1`,
       [`%${nameB}%`]
     );
 
     if (modelsA.length === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: `'${nameA}'와 일치하는 모델을 찾을 수 없습니다`
       });
+      return;
     }
 
     if (modelsB.length === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: `'${nameB}'와 일치하는 모델을 찾을 수 없습니다`
       });
+      return;
     }
 
     // 비교 실행
@@ -207,6 +233,7 @@ router.get('/quick-compare', async (req: Request, res: Response) => {
       },
       data: comparison
     });
+    return;
 
   } catch (error: any) {
     console.error('간편 비교 오류:', error);
@@ -216,6 +243,7 @@ router.get('/quick-compare', async (req: Request, res: Response) => {
       error: '간편 비교 중 오류가 발생했습니다',
       details: error.message
     });
+    return;
   }
 });
 
