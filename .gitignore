@@ -42,5 +42,7 @@ Thumbs.db
 # api data
 data/
 
-# test 
-src/test/
+# test 11-25 기준으로 공유로 변경
+#src/test/
+src/test/testModelComparison.ts
+src/test/testModelTimeline.ts

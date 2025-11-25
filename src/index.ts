@@ -15,6 +15,7 @@ import { getConfig } from "./config/environment";
 import { getDatabasePool } from "./database/mysql";
 import { getRedisCache } from "./database/redis";
 import { Logger } from "./database/logger";
+import { initializeAllSchedulers, stopAllSchedulers } from "./cron";
 
 // 뉴스 클러스터링 라우터
 import newsRouter from "./routes/news";
@@ -115,7 +116,12 @@ async function startServer(): Promise<void> {
       console.log("=".repeat(70) + "\n");
     });
 
-    // ============ 파이프라인 스케줄러 시작 ============
+    // ============ 데이터 수집 파이프라인 스케줄러 시작 ============
+
+    console.log("📅 Starting Data Collection Pipeline Scheduler...\n");
+    initializeAllSchedulers();
+
+    // ============ 뉴스 클러스터링 파이프라인 스케줄러 시작 ============
 
     console.log("📅 Starting News Clustering Pipeline Scheduler...\n");
     const scheduleTime = process.env.PIPELINE_SCHEDULE_TIME || "0 * * * *";
@@ -136,6 +142,9 @@ async function startServer(): Promise<void> {
 
     const gracefulShutdown = async () => {
       logger.info("Shutting down server gracefully...");
+
+      // 데이터 수집 스케줄러 중지
+      stopAllSchedulers();
 
       server.close(async () => {
         logger.info("HTTP server closed");
