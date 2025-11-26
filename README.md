@@ -978,6 +978,254 @@ AI 모델 목록을 페이지네이션으로 조회합니다.
 
 ---
 
+## 📝 작업별 모델 추천 API
+
+### 1. 작업 분류
+
+**POST** `/api/v1/tasks/classify`
+
+사용자가 입력한 자연어 작업 설명을 25개 작업 카테고리 중 하나로 자동 분류합니다.
+
+**Request Body**:
+```json
+{
+  "user_input": "Python으로 데이터 분석 코드를 작성하고 싶어요"
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "data": {
+    "task_category_id": 3,
+    "category_code": "coding",
+    "category_name_ko": "코딩/개발",
+    "category_name_en": "Coding",
+    "confidence_score": 0.95,
+    "reasoning": "사용자가 Python으로 데이터 분석 코드를 작성하고자 하는 명확한 코딩 작업"
+  }
+}
+```
+
+---
+
+### 2. 작업 분류 및 모델 추천 (통합)
+
+**POST** `/api/v1/tasks/classify-and-recommend`
+
+작업 분류와 해당 작업에 최적화된 AI 모델 추천을 한 번에 수행합니다.
+
+**Request Body**:
+```json
+{
+  "user_input": "영어 논문을 한국어로 번역해주세요",
+  "limit": 5
+}
+```
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "data": {
+    "classification": {
+      "task_category_id": 12,
+      "category_code": "translation",
+      "category_name_ko": "번역",
+      "category_name_en": "Translation",
+      "confidence_score": 0.95,
+      "reasoning": "사용자가 영어 논문을 한국어로 번역하고자 하는 명확한 번역 작업"
+    },
+    "criteria": {
+      "primary_benchmark": "MMLU_PRO",
+      "secondary_benchmark": "MGSM",
+      "weights": {
+        "primary": 0.7,
+        "secondary": 0.3
+      }
+    },
+    "recommended_models": [
+      {
+        "rank": 1,
+        "model_id": "uuid-123",
+        "model_name": "GPT-4 Turbo",
+        "creator_name": "OpenAI",
+        "weighted_score": 94.2,
+        "benchmark_scores": {
+          "primary": {
+            "name": "MMLU_PRO",
+            "score": 86.7,
+            "weight": 0.7,
+            "contribution": 60.69
+          },
+          "secondary": {
+            "name": "MGSM",
+            "score": 89.3,
+            "weight": 0.3,
+            "contribution": 26.79
+          }
+        },
+        "overall_score": 87.5,
+        "pricing": {
+          "input_price": 10.0,
+          "output_price": 30.0
+        }
+      }
+    ],
+    "metadata": {
+      "total_models_evaluated": 5,
+      "classification_time_ms": 1250,
+      "recommendation_time_ms": 180
+    }
+  }
+}
+```
+
+---
+
+### 3. 작업 카테고리 목록
+
+**GET** `/api/v1/tasks/categories`
+
+25개 작업 카테고리 목록을 조회합니다.
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "task_category_id": 1,
+      "category_code": "writing",
+      "category_name_ko": "글쓰기",
+      "category_name_en": "Writing",
+      "description": "문서 작성, 블로그 글쓰기, 소설 등 다양한 텍스트 작성",
+      "keywords": ["글쓰기", "작문", "문서"],
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00.000Z",
+      "updated_at": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "task_category_id": 3,
+      "category_code": "coding",
+      "category_name_ko": "코딩/개발",
+      "category_name_en": "Coding",
+      "description": "프로그래밍 코드 작성, 디버깅, 리팩토링 등",
+      "keywords": ["코딩", "개발", "프로그래밍"],
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00.000Z",
+      "updated_at": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "task_category_id": 6,
+      "category_code": "translation",
+      "category_name_ko": "번역",
+      "category_name_en": "Translation",
+      "description": "다국어 번역 및 언어 변환",
+      "keywords": ["번역", "통역", "언어"],
+      "is_active": true,
+      "created_at": "2025-01-01T00:00:00.000Z",
+      "updated_at": "2025-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+**25개 작업 카테고리 (SLM 분류 대상)**:
+1. 글쓰기 (writing)
+2. 이미지 작업 (image_generation_editing)
+3. 코딩/개발 (coding)
+4. 영상 제작 (video_production)
+5. 음악/오디오 (audio_music)
+6. 번역 (translation)
+7. 요약/정리 (summarization)
+8. 연구/조사 (research)
+9. 학습/교육 (learning)
+10. 창작/아이디어 (brainstorming)
+11. 분석 (analysis)
+12. 고객 응대 (customer_service)
+13. 디자인/UI-UX (design)
+14. 마케팅 (marketing)
+15. 요리 (cooking)
+16. 운동/피트니스 (fitness)
+17. 여행 계획 (travel_planning)
+18. 일정 관리 (schedule_planning)
+19. 수학/과학 (math_science)
+20. 법률/계약 (legal)
+21. 재무/회계 (finance)
+22. 인적자원/채용 (hr_recruitment)
+23. 프레젠테이션 (presentation)
+24. 게임 (gaming)
+25. 음성 명령/작업 (voice_action)
+
+---
+
+### 4. 특정 카테고리로 모델 추천
+
+**GET** `/api/v1/tasks/categories/:category_code/recommend?limit=3`
+
+특정 작업 카테고리에 최적화된 AI 모델을 추천합니다.
+
+**Path Parameters**:
+- `category_code` (required): 작업 카테고리 코드 (예: coding, translation, writing)
+
+**Query Parameters**:
+- `limit` (optional, default: 3, max: 10): 추천 개수
+
+**Response** (200 OK):
+```json
+{
+  "success": true,
+  "data": {
+    "task_category": {
+      "task_category_id": 3,
+      "category_code": "coding",
+      "category_name_ko": "코딩/개발",
+      "category_name_en": "Coding"
+    },
+    "criteria": {
+      "primary_benchmark": "LiveCodeBench",
+      "secondary_benchmark": "HumanEval",
+      "weights": {
+        "primary": 0.7,
+        "secondary": 0.3
+      }
+    },
+    "recommended_models": [
+      {
+        "rank": 1,
+        "model_id": "uuid-123",
+        "model_name": "GPT-4 Turbo",
+        "creator_name": "OpenAI",
+        "weighted_score": 96.5,
+        "benchmark_scores": {
+          "primary": {
+            "name": "LiveCodeBench",
+            "score": 72.3,
+            "weight": 0.7,
+            "contribution": 50.61
+          },
+          "secondary": {
+            "name": "HumanEval",
+            "score": 88.5,
+            "weight": 0.3,
+            "contribution": 26.55
+          }
+        },
+        "overall_score": 85.7,
+        "pricing": {
+          "input_price": 10.0,
+          "output_price": 30.0
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## ⚖️ 모델 비교 API
 
 ### 1. 두 모델 비교
