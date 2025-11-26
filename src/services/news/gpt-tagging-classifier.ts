@@ -9,6 +9,7 @@
 
 import OpenAI from 'openai';
 import type { TextContentBlock } from 'openai/resources/beta/threads/messages';
+import { getConfig } from '../../config/environment';
 import {
   TaggingGPTInput,
   GPTTaggingResponse,
@@ -18,15 +19,17 @@ import {
 
 // ============ 설정 ============
 
+const config = getConfig();
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: config.externalApis.openai.apiKey,
 });
 
 /**
  * 사전 정의된 GPT Assistant ID
  * 프롬프트가 이미 입력되어 있음
  */
-const TAGGING_ASSISTANT_ID = 'asst_L9155C6HqWSKrXKrEMggrRwq';
+const TAGGING_ASSISTANT_ID = config.externalApis.openai.assistants.tagging;
 
 // ============ GPT API 호출 ============
 

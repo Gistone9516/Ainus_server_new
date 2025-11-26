@@ -99,6 +99,14 @@ export interface AppConfig {
       clientId: string;
       clientSecret: string;
     };
+    openai: {
+      apiKey: string;
+      assistants: {
+        newsClassifier: string;
+        tagging: string;
+        issueIndex?: string;
+      };
+    };
   };
 
   // Features
@@ -216,6 +224,15 @@ export function loadConfig(): AppConfig {
       naverNews: {
         clientId: process.env.NAVER_NEWS_CLIENT_ID || process.env.NAVER_CLIENT_ID || '',
         clientSecret: process.env.NAVER_NEWS_CLIENT_SECRET || process.env.NAVER_CLIENT_SECRET || ''
+      },
+      openai: {
+        apiKey: process.env.OPENAI_API_KEY || '',
+        assistants: {
+          // 기본값은 하드코딩된 값 유지 (하위 호환성) 또는 환경변수
+          newsClassifier: process.env.OPENAI_ASSISTANT_ID_NEWS_CLASSIFIER || process.env.OPENAI_ASSISTANT_ID || 'asst_EaIPCgI31CX996Zvl61Oqk7C',
+          tagging: process.env.OPENAI_ASSISTANT_ID_TAGGING || 'asst_L9155C6HqWSKrXKrEMggrRwq',
+          issueIndex: process.env.OPENAI_ASSISTANT_ID_ISSUE_INDEX // 필요한 경우 추가
+        }
       }
     },
 

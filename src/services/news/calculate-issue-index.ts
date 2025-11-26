@@ -8,9 +8,13 @@
  * 4. 통합 지수 = (활성_평균 × 1.0) + (비활성_평균 × 0.5)
  */
 
+import { getConfig } from "../../config/environment";
+
+const config = getConfig();
+
 // ============ Type 정의 ============
 
-interface ClusterSnapshot {
+export interface ClusterSnapshot {
   cluster_id: string;
   topic_name: string;
   tags: string[];
@@ -22,13 +26,13 @@ interface ClusterSnapshot {
   collected_at: string;
 }
 
-interface IssueIndexInput {
+export interface IssueIndexInput {
   active_clusters: ClusterSnapshot[];
   inactive_clusters_within_30days: ClusterSnapshot[];
   calculated_at: string;
 }
 
-interface IssueIndexOutput {
+export interface IssueIndexOutput {
   collected_at: string;
   overall_index: number;
   active_average: number;
@@ -46,7 +50,7 @@ interface IssueIndexOutput {
  * @param endDate ISO 8601 datetime (예: "2025-11-15T12:00:00Z")
  * @returns 경과 일수
  */
-function calculateDaysDifference(startDate: string, endDate: string): number {
+export function calculateDaysDifference(startDate: string, endDate: string): number {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const diffMs = end.getTime() - start.getTime();
@@ -60,7 +64,7 @@ function calculateDaysDifference(startDate: string, endDate: string): number {
  * @param daysPassed 경과 일수
  * @returns 감쇠된 점수
  */
-function applyExponentialDecay(baseScore: number, daysPassed: number): number {
+export function applyExponentialDecay(baseScore: number, daysPassed: number): number {
   // e^(-0.1 × 비활성_경과일수)
   const decayFactor = Math.exp(-0.1 * daysPassed);
   return baseScore * decayFactor;
@@ -71,7 +75,7 @@ function applyExponentialDecay(baseScore: number, daysPassed: number): number {
  * @param activeClusters 활성 클러스터 배열
  * @returns 활성 평균 점수
  */
-function calculateActiveAverage(activeClusters: ClusterSnapshot[]): number {
+export function calculateActiveAverage(activeClusters: ClusterSnapshot[]): number {
   if (activeClusters.length === 0) {
     return 0;
   }
@@ -89,7 +93,7 @@ function calculateActiveAverage(activeClusters: ClusterSnapshot[]): number {
  * @param currentTime 현재 시간 (기준점)
  * @returns 비활성 감쇠 평균 점수
  */
-function calculateInactiveAverage(
+export function calculateInactiveAverage(
   inactiveClusters: ClusterSnapshot[],
   currentTime: string
 ): number {
@@ -135,7 +139,7 @@ function calculateOverallIndex(
  * @param input 활성/비활성 클러스터 데이터
  * @returns 계산된 이슈 지수 정보
  */
-function calculateIssueIndex(input: IssueIndexInput): IssueIndexOutput {
+export function calculateIssueIndex(input: IssueIndexInput): IssueIndexOutput {
   console.log("\n========== Calculating Issue Index ==========\n");
 
   const { active_clusters, inactive_clusters_within_30days, calculated_at } = input;
@@ -185,16 +189,3 @@ function calculateIssueIndex(input: IssueIndexInput): IssueIndexOutput {
     calculated_at: new Date().toISOString(),
   };
 }
-
-// ============ Export ============
-
-export {
-  calculateIssueIndex,
-  calculateActiveAverage,
-  calculateInactiveAverage,
-  applyExponentialDecay,
-  calculateDaysDifference,
-  IssueIndexInput,
-  IssueIndexOutput,
-  ClusterSnapshot,
-};

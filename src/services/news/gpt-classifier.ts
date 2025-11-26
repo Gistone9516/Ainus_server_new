@@ -1,7 +1,7 @@
 /**
  * OpenAI Assistants API를 사용한 뉴스 클러스터 분류
  *
- * Assistant ID: asst_EaIPCgI31CX996Zvl61Oqk7C
+ * Assistant ID: config.externalApis.openai.assistants.newsClassifier
  * (사전 프롬프트가 이미 입력되어 있음)
  *
  * 역할:
@@ -12,6 +12,9 @@
 
 import OpenAI from "openai";
 import type { TextContentBlock } from "openai/resources/beta/threads/messages";
+import { getConfig } from "../../config/environment";
+
+const config = getConfig();
 
 // ============ Type 정의 ============
 
@@ -44,10 +47,10 @@ interface GPTClassificationResult {
 // ============ OpenAI 클라이언트 초기화 ============
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: config.externalApis.openai.apiKey,
 });
 
-const ASSISTANT_ID = "asst_EaIPCgI31CX996Zvl61Oqk7C";
+const ASSISTANT_ID = config.externalApis.openai.assistants.newsClassifier;
 
 // ============ Assistants API 호출 ============
 
