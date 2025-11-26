@@ -4,6 +4,9 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { executeQuery } from '@/database/mysql';
+import { getConfig } from '@/config/environment';
+
+const config = getConfig();
 
 /**
  * 관리자 권한 확인
@@ -26,10 +29,8 @@ export async function requireAdmin(
       return;
     }
 
-    // 환경 변수로 관리자 ID 목록 확인
-    const adminIds = process.env.ADMIN_USER_IDS
-      ? process.env.ADMIN_USER_IDS.split(',').map((id) => parseInt(id.trim()))
-      : [];
+    // config에서 관리자 ID 목록 확인
+    const adminIds = config.admin.userIds;
 
     // 관리자 ID 목록에 있으면 통과
     if (adminIds.includes(userId)) {
@@ -63,12 +64,14 @@ export async function requireAdmin(
 
     // 임시: 환경 변수에 설정된 관리자 ID만 허용
     if (adminIds.length === 0) {
-      // 환경 변수 미설정 시 모든 인증된 사용자 허용 (개발 모드)
-      console.warn(
-        '⚠️  WARNING: ADMIN_USER_IDS not set. Allowing all authenticated users for admin endpoints.'
-      );
-      next();
-      return;
+      // 환경 변수 미설정 시 모든 인증된 사용자 허용 (개발 모드에서만 권장)
+      if (config.nodeEnv === 'development') {
+        console.warn(
+          '⚠️  WARNING: ADMIN_USER_IDS not set. Allowing all authenticated users for admin endpoints.'
+        );
+        next();
+        return;
+      }
     }
 
     res.status(403).json({

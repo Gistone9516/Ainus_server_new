@@ -9,6 +9,9 @@ import rateLimit, {
   ipKeyGenerator
 } from 'express-rate-limit';
 import { Request, Response } from 'express';
+import { getConfig } from '../config/environment';
+
+const config = getConfig();
 
 // TODO: 프로덕션 환경에서는 rate-limit-redis를 사용하여 분산 환경 지원
 // import RedisStore from 'rate-limit-redis';
@@ -20,7 +23,7 @@ import { Request, Response } from 'express';
  */
 export function createLoginRateLimiter(): RateLimitRequestHandler {
   return rateLimit({
-    windowMs: 15 * 60 * 1000, // 15분
+    windowMs: 15 * 60 * 1000, // 15분 (로그인은 별도 정책 유지)
     max: 5, // 최대 5회
     message: '로그인 시도 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
@@ -58,7 +61,7 @@ export function createLoginRateLimiter(): RateLimitRequestHandler {
  */
 export function createRegisterRateLimiter(): RateLimitRequestHandler {
   return rateLimit({
-    windowMs: 60 * 60 * 1000, // 1시간
+    windowMs: 60 * 60 * 1000, // 1시간 (회원가입은 별도 정책 유지)
     max: 3, // 최대 3회
     message: '회원가입 시도 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
@@ -90,12 +93,12 @@ export function createRegisterRateLimiter(): RateLimitRequestHandler {
 
 /**
  * 전역 API Rate Limiter
- * 15분 내 100회 제한
+ * config 설정을 따름 (기본: 15분 내 100회)
  */
 export function createGlobalRateLimiter(): RateLimitRequestHandler {
   return rateLimit({
-    windowMs: 15 * 60 * 1000, // 15분
-    max: 100, // 최대 100회
+    windowMs: config.security.rateLimit.windowMs,
+    max: config.security.rateLimit.maxRequests,
     message: 'API 요청 횟수를 초과했습니다. 나중에 다시 시도해주세요',
     statusCode: 429,
     keyGenerator: (req: Request) => {

@@ -6,9 +6,10 @@
 
 import { executeQuery, queryOne, executeModify } from '../../database/mysql';
 import { getRedisCache } from '../../database/redis';
-import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken } from '../../utils/jwt';
+import { generateToken, verifyToken, generateAccessToken, generateRefreshToken, decodeToken, parseDuration } from '../../utils/jwt';
 import { hashPassword, verifyPassword } from '../../utils/password';
 import { isStrongPassword } from '../../utils/passwordValidator';
+import { getConfig } from '../../config/environment';
 import {
   ValidationException,
   DatabaseException,
@@ -21,6 +22,8 @@ import {
   recordLoginAudit
 } from './LoginAuditService';
 import { User, JwtPayload } from '../../types';
+
+const config = getConfig();
 
 interface RegisterRequest {
   email: string;
@@ -375,7 +378,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
       const decodedRefresh = decodeToken(refresh_token);
       if (decodedRefresh?.jti) {
         const refreshTokenKey = `refresh:${user.user_id}:${decodedRefresh.jti}`;
-        const refreshTokenTTL = 7 * 24 * 60 * 60; // 7일
+        const refreshTokenTTL = parseDuration(config.jwt.refreshExpiresIn);
         await redisCache.set(refreshTokenKey, refresh_token, refreshTokenTTL);
       }
     } catch (redisError) {
@@ -383,7 +386,7 @@ export async function login(request: LoginRequest): Promise<LoginResult> {
       // Redis 실패는 로그인을 막지 않음
     }
 
-    const expires_in = 900; // 15분 (초 단위)
+    const expires_in = parseDuration(config.jwt.expiresIn);
 
     return {
       user: {
@@ -531,7 +534,8 @@ export async function refreshAccessToken(
     // 1단계: Refresh Token 검증
     let payload: any;
     try {
-      payload = verifyToken(refreshToken);
+      // Refresh Token 검증 시 isRefresh = true
+      payload = verifyToken(refreshToken, true);
     } catch (error) {
       throw new AuthenticationException(
         `유효하지 않은 Refresh Token입니다 (ERROR_3001)`,
@@ -581,7 +585,7 @@ export async function refreshAccessToken(
       const decodedNew = decodeToken(newRefreshToken);
       if (decodedNew?.jti) {
         const newRefreshTokenKey = `refresh:${payload.user_id}:${decodedNew.jti}`;
-        const refreshTokenTTL = 7 * 24 * 60 * 60;
+        const refreshTokenTTL = parseDuration(config.jwt.refreshExpiresIn);
         await redisCache.set(newRefreshTokenKey, newRefreshToken, refreshTokenTTL);
       }
 
@@ -589,7 +593,7 @@ export async function refreshAccessToken(
       await redisCache.delete(refreshTokenKey);
     }
 
-    const expires_in = 900; // 15분
+    const expires_in = parseDuration(config.jwt.expiresIn);
 
     return {
       access_token: newAccessToken,
@@ -630,7 +634,7 @@ export async function logout(
     // Refresh Token을 블랙리스트에 추가
     if (refreshToken) {
       try {
-        const payload = verifyToken(refreshToken);
+        const payload = verifyToken(refreshToken, true); // Refresh Token 검증
         if (payload.token_type === 'refresh') {
           const refreshTokenKey = `refresh:${payload.user_id}:${payload.jti}`;
           await redisCache.delete(refreshTokenKey);
@@ -648,8 +652,6 @@ export async function logout(
     throw new AuthenticationException(`로그아웃 처리 실패: ${error}`, methodName);
   }
 }
-
-// ===== Phase 3: Email & Password Reset Functions =====
 
 /**
  * 비밀번호 재설정 요청 (TASK-3-3)
@@ -781,12 +783,6 @@ export async function resetPassword(
       throw new DatabaseException(`비밀번호 업데이트 실패: ${error}`, methodName);
     }
 
-    // 5단계: 모든 세션 로그아웃 처리 (보안)
-    // 주의: 현재 RedisCache는 패턴 매칭 삭제를 지원하지 않음
-    // 실제 프로덕션에서는 Redis SCAN 명령어를 사용하여 구현 필요
-    // const redisCache = getRedisCache();
-    // await redisCache.deletePattern(`refresh:${resetTokenRecord.user_id}:*`);
-
     return {
       success: true,
       message: '비밀번호가 성공적으로 재설정되었습니다. 새로운 비밀번호로 로그인해주세요.'
@@ -883,13 +879,10 @@ export async function verifyEmail(token: string): Promise<{ success: boolean; me
     }
 
     // 2단계: 토큰 검증 (현재는 Redis 또는 DB에서 확인)
-    // 실제 구현은 email_verification_tokens 테이블이 필요함
-    // 여기서는 간단히 처리
     const { hashToken: hashTokenFunc } = await import('../../utils/tokenGenerator');
     const tokenHash = hashTokenFunc(token);
 
     // 데이터베이스에서 토큰 확인 (email_verification_tokens 테이블 가정)
-    // 이 테이블이 없으면 생성이 필요함
     try {
       const verificationRecord = await queryOne<any>(
         `SELECT token_id, user_id, expires_at

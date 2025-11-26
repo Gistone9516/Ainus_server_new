@@ -225,7 +225,7 @@ export class AuthController {
         const state = await generateGoogleOAuthState();
         const googleOAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         googleOAuthUrl.searchParams.set('client_id', config.oauth.google.clientId);
-        googleOAuthUrl.searchParams.set('redirect_uri', config.oauth.google.redirectUri);
+        googleOAuthUrl.searchParams.set('redirect_uri', config.oauth.google.callbackUrl);
         googleOAuthUrl.searchParams.set('response_type', 'code');
         googleOAuthUrl.searchParams.set('scope', 'openid profile email');
         googleOAuthUrl.searchParams.set('state', state);
@@ -259,7 +259,7 @@ export class AuthController {
         const state = await generateKakaoOAuthState();
         const kakaoOAuthUrl = new URL('https://kauth.kakao.com/oauth/authorize');
         kakaoOAuthUrl.searchParams.set('client_id', config.oauth.kakao.clientId);
-        kakaoOAuthUrl.searchParams.set('redirect_uri', config.oauth.kakao.redirectUri);
+        kakaoOAuthUrl.searchParams.set('redirect_uri', config.oauth.kakao.callbackUrl);
         kakaoOAuthUrl.searchParams.set('response_type', 'code');
         kakaoOAuthUrl.searchParams.set('state', state);
         res.redirect(kakaoOAuthUrl.toString());
@@ -292,7 +292,7 @@ export class AuthController {
         const state = await generateNaverOAuthState();
         const naverOAuthUrl = new URL('https://nid.naver.com/oauth2.0/authorize');
         naverOAuthUrl.searchParams.set('client_id', config.oauth.naver.clientId);
-        naverOAuthUrl.searchParams.set('redirect_uri', config.oauth.naver.redirectUri);
+        naverOAuthUrl.searchParams.set('redirect_uri', config.oauth.naver.callbackUrl);
         naverOAuthUrl.searchParams.set('response_type', 'code');
         naverOAuthUrl.searchParams.set('state', state);
         res.redirect(naverOAuthUrl.toString());

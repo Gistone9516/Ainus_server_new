@@ -90,7 +90,7 @@ export async function getGoogleAccessToken(code: string): Promise<GoogleTokenRes
         code,
         client_id: config.oauth.google.clientId,
         client_secret: config.oauth.google.clientSecret,
-        redirect_uri: config.oauth.google.redirectUri,
+        redirect_uri: config.oauth.google.callbackUrl,
         grant_type: 'authorization_code'
       },
       { timeout: 10000 }

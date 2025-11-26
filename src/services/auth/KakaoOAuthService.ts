@@ -93,7 +93,7 @@ export async function getKakaoAccessToken(code: string): Promise<KakaoTokenRespo
         grant_type: 'authorization_code',
         client_id: config.oauth.kakao.clientId,
         client_secret: config.oauth.kakao.clientSecret,
-        redirect_uri: config.oauth.kakao.redirectUri,
+        redirect_uri: config.oauth.kakao.callbackUrl,
         code
       },
       {

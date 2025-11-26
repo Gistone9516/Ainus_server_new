@@ -87,7 +87,6 @@ export async function getNaverAccessToken(code: string, state: string): Promise<
     const response = await axios.post<NaverTokenResponse>(
       'https://nid.naver.com/oauth2.0/token',
       {
-        grant_type: 'authorization_code',
         client_id: config.oauth.naver.clientId,
         client_secret: config.oauth.naver.clientSecret,
         code,
