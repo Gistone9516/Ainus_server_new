@@ -17,12 +17,24 @@ export interface AppConfig {
   // JWT
   jwt: {
     secret: string;
-    expiry: string;
+    expiresIn: string;
+    refreshSecret: string;
+    refreshExpiresIn: string;
   };
 
   // Encryption (Phase 2)
   encryption: {
     key: string;
+  };
+
+  // Security
+  security: {
+    bcryptRounds: number;
+    rateLimit: {
+      windowMs: number;
+      maxRequests: number;
+    };
+    apiTimeout: number;
   };
 
   // Database
@@ -50,18 +62,23 @@ export interface AppConfig {
     google: {
       clientId: string;
       clientSecret: string;
-      redirectUri: string;
+      callbackUrl: string;
     };
     kakao: {
       clientId: string;
       clientSecret: string;
-      redirectUri: string;
+      callbackUrl: string;
     };
     naver: {
       clientId: string;
       clientSecret: string;
-      redirectUri: string;
+      callbackUrl: string;
     };
+  };
+
+  // Admin
+  admin: {
+    userIds: number[];
   };
 
   // Email Configuration (Phase 3)
@@ -78,7 +95,10 @@ export interface AppConfig {
   // External APIs
   externalApis: {
     artificialAnalysisApiKey: string;
-    naverNewsApiKey: string;
+    naverNews: {
+      clientId: string;
+      clientSecret: string;
+    };
   };
 
   // Features
@@ -121,11 +141,22 @@ export function loadConfig(): AppConfig {
 
     jwt: {
       secret: process.env.JWT_SECRET!,
-      expiry: process.env.JWT_EXPIRY || '30d'
+      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      refreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET!,
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
     },
 
     encryption: {
       key: process.env.ENCRYPTION_KEY || 'your-32-byte-encryption-key-here!'
+    },
+
+    security: {
+      bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '10', 10),
+      rateLimit: {
+        windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15분
+        maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10)
+      },
+      apiTimeout: parseInt(process.env.API_TIMEOUT_MS || '30000', 10)
     },
 
     database: {
@@ -135,33 +166,39 @@ export function loadConfig(): AppConfig {
       password: process.env.DB_PASSWORD!,
       name: process.env.DB_NAME!,
       waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
+      connectionLimit: parseInt(process.env.DB_POOL_SIZE || '10', 10),
+      queueLimit: parseInt(process.env.DB_QUEUE_LIMIT || '0', 10)
     },
 
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
-      db: 0
+      db: parseInt(process.env.REDIS_DB || '0', 10)
     },
 
     oauth: {
       google: {
         clientId: process.env.GOOGLE_CLIENT_ID || '',
         clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/google/callback'
+        callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/v1/auth/google/callback'
       },
       kakao: {
         clientId: process.env.KAKAO_CLIENT_ID || '',
         clientSecret: process.env.KAKAO_CLIENT_SECRET || '',
-        redirectUri: process.env.KAKAO_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/kakao/callback'
+        callbackUrl: process.env.KAKAO_CALLBACK_URL || 'http://localhost:3000/api/v1/auth/kakao/callback'
       },
       naver: {
         clientId: process.env.NAVER_CLIENT_ID || '',
         clientSecret: process.env.NAVER_CLIENT_SECRET || '',
-        redirectUri: process.env.NAVER_REDIRECT_URI || 'http://localhost:3000/api/v1/auth/naver/callback'
+        callbackUrl: process.env.NAVER_CALLBACK_URL || 'http://localhost:3000/api/v1/auth/naver/callback'
       }
+    },
+
+    admin: {
+      userIds: process.env.ADMIN_USER_IDS
+        ? process.env.ADMIN_USER_IDS.split(',').map(id => parseInt(id.trim(), 10))
+        : []
     },
 
     email: {
@@ -176,7 +213,10 @@ export function loadConfig(): AppConfig {
 
     externalApis: {
       artificialAnalysisApiKey: process.env.ARTIFICIAL_ANALYSIS_API_KEY || '',
-      naverNewsApiKey: process.env.NAVER_NEWS_API_KEY || ''
+      naverNews: {
+        clientId: process.env.NAVER_NEWS_CLIENT_ID || process.env.NAVER_CLIENT_ID || '',
+        clientSecret: process.env.NAVER_NEWS_CLIENT_SECRET || process.env.NAVER_CLIENT_SECRET || ''
+      }
     },
 
     features: {

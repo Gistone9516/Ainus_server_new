@@ -1,9 +1,9 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import dotenv from 'dotenv';
+import { getConfig } from '../../config/environment';
 
-dotenv.config();
+const config = getConfig();
 
 interface NaverNewsItem {
   title: string;
@@ -27,8 +27,8 @@ export class NaverCollector {
   private baseUrl: string = 'https://openapi.naver.com/v1/search';
 
   constructor() {
-    this.clientId = process.env.NAVER_CLIENT_ID || '';
-    this.clientSecret = process.env.NAVER_CLIENT_SECRET || '';
+    this.clientId = config.externalApis.naverNews.clientId;
+    this.clientSecret = config.externalApis.naverNews.clientSecret;
     
     if (!this.clientId || !this.clientSecret) {
       throw new Error('Naver API 키가 설정되지 않았습니다');
@@ -65,7 +65,7 @@ export class NaverCollector {
           'X-Naver-Client-Id': this.clientId,
           'X-Naver-Client-Secret': this.clientSecret
         },
-        timeout: 30000
+        timeout: config.security.apiTimeout
       });
 
       const data = response.data;

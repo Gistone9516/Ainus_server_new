@@ -34,7 +34,7 @@ async function initMySQL(): Promise<void> {
   const host = process.env.MYSQL_HOST || "localhost";
   const user = process.env.MYSQL_USER || "root";
   const password = process.env.MYSQL_PASSWORD || "password";
-  const database = process.env.MYSQL_DB || "ai_news_classifier";
+  const database = process.env.MYSQL_DATABASE || process.env.MYSQL_DB || "ai_news_classifier";
 
   let connection: any = null;
 

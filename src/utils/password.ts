@@ -4,8 +4,10 @@
  */
 
 import bcrypt from 'bcryptjs';
+import { getConfig } from '../config/environment';
 
-const SALT_ROUNDS = 10;
+const config = getConfig();
+const SALT_ROUNDS = config.security.bcryptRounds;
 
 /**
  * 평문 비밀번호를 해시로 변환

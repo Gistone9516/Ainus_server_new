@@ -1,8 +1,8 @@
 import axios from "axios";
-import dotenv from "dotenv";
+import { getConfig } from "../../config/environment";
 import { RawDataManager } from "../../utils/rawDataManager";
 
-dotenv.config();
+const config = getConfig();
 
 export interface NaverNewsItem {
   title: string;
@@ -29,8 +29,8 @@ export class NaverCollector {
   private retryDelay: number = 2000;
 
   constructor() {
-    this.clientId = process.env.NAVER_CLIENT_ID || "";
-    this.clientSecret = process.env.NAVER_CLIENT_SECRET || "";
+    this.clientId = config.externalApis.naverNews.clientId;
+    this.clientSecret = config.externalApis.naverNews.clientSecret;
 
     if (!this.clientId || !this.clientSecret) {
       throw new Error("Naver API 키가 설정되지 않았습니다");
@@ -72,7 +72,7 @@ export class NaverCollector {
             "X-Naver-Client-Id": this.clientId,
             "X-Naver-Client-Secret": this.clientSecret,
           },
-          timeout: 30000,
+          timeout: config.security.apiTimeout,
         });
 
         const data = response.data;
@@ -175,7 +175,7 @@ export class NaverCollector {
           "X-Naver-Client-Id": this.clientId,
           "X-Naver-Client-Secret": this.clientSecret,
         },
-        timeout: 10000,
+        timeout: 10000, // 테스트는 짧게 유지
       });
 
       console.log("[Naver Collector] API 연결 성공:", response.status);
