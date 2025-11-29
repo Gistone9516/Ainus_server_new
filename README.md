@@ -1623,6 +1623,203 @@ AI 모델 목록을 페이지네이션으로 조회합니다.
 
 ---
 
+
+---
+
+## 👔 직업별 이슈 지수 API
+
+### 5. 특정 직업 이슈 지수 조회
+
+**GET** `/api/issue-index/job/:category`
+
+특정 직업 카테고리의 이슈 지수를 조회합니다.
+
+**Path Parameters**:
+- `category` (required): 직업 카테고리 (예: "기술/개발", "데이터 과학", "연구원" 등)
+
+**Query Parameters**:
+- `collected_at` (optional): 특정 시간 조회 (ISO 8601 format), 없으면 최신 데이터
+
+**Response** (200 OK):
+```json
+{
+  "job_category": "기술/개발",
+  "collected_at": "2025-01-01T14:00:00.000Z",
+  "issue_index": 58.3,
+  "active_clusters_count": 5,
+  "inactive_clusters_count": 3,
+  "total_articles_count": 234
+}
+```
+
+**에러 응답** (400 Bad Request):
+```json
+{
+  "error": "Invalid job category",
+  "message": "\"잘못된카테고리\" is not a valid job category"
+}
+```
+
+**에러 응답** (404 Not Found):
+```json
+{
+  "error": "Not found",
+  "message": "No issue index data found for \"기술/개발\""
+}
+```
+
+---
+
+### 6. 전체 직업 이슈 지수 조회
+
+**GET** `/api/issue-index/jobs/all`
+
+13개 직업 카테고리의 전체 이슈 지수를 조회합니다.
+
+**Query Parameters**:
+- `collected_at` (optional): 특정 시간 조회 (ISO 8601 format), 없으면 최신 데이터
+
+**Response** (200 OK):
+```json
+{
+  "collected_at": "2025-01-01T14:00:00.000Z",
+  "jobs": [
+    {
+      "job_category": "기술/개발",
+      "issue_index": 58.3,
+      "active_clusters_count": 5,
+      "inactive_clusters_count": 3,
+      "total_articles_count": 234
+    },
+    {
+      "job_category": "데이터 과학",
+      "issue_index": 52.1,
+      "active_clusters_count": 4,
+      "inactive_clusters_count": 2,
+      "total_articles_count": 189
+    }
+  ]
+}
+```
+
+**참고**: 결과는 `issue_index` 내림차순으로 정렬됩니다.
+
+---
+
+### 7. 직업별 매칭 클러스터 조회
+
+**GET** `/api/issue-index/job/:category/clusters`
+
+특정 직업 카테고리에 매칭된 클러스터 목록을 조회합니다. 이슈 지수 계산의 근거 데이터를 확인할 수 있습니다.
+
+**Path Parameters**:
+- `category` (required): 직업 카테고리
+
+**Query Parameters**:
+- `collected_at` (optional): 특정 시간 조회 (ISO 8601 format), 없으면 최신 데이터
+- `status` (optional): `active` | `inactive` | `all` (default: `all`)
+
+**Response** (200 OK):
+```json
+{
+  "job_category": "기술/개발",
+  "collected_at": "2025-01-01T14:00:00.000Z",
+  "clusters": [
+    {
+      "cluster_id": "cluster_001",
+      "topic_name": "GPT-5 출시",
+      "tags": ["LLM", "코드생성", "AI개발", "프로그래밍", "혁신"],
+      "cluster_score": 65.3,
+      "status": "active",
+      "article_count": 45,
+      "article_indices": [0, 4, 15, 23, 45, ...],
+      "appearance_count": 5,
+      "match_ratio": 0.4,
+      "weighted_score": 26.12
+    },
+    {
+      "cluster_id": "cluster_002",
+      "topic_name": "코드 자동화 도구",
+      "tags": ["자동화", "개발도구", "생산성", "코딩", "AI"],
+      "cluster_score": 58.7,
+      "status": "active",
+      "article_count": 32,
+      "article_indices": [1, 8, 19, 34, ...],
+      "appearance_count": 3,
+      "match_ratio": 0.6,
+      "weighted_score": 35.22
+    }
+  ],
+  "metadata": {
+    "total_clusters": 8,
+    "total_articles": 234
+  }
+}
+```
+
+**필드 설명**:
+- `match_ratio`: 클러스터 태그와 직업 태그의 매칭 비율 (0.0-1.0)
+- `weighted_score`: 가중 점수 (cluster_score × match_ratio)
+- `total_articles`: 중복 제거된 총 기사 개수
+
+---
+
+### 8. 직업별 매칭 기사 원문 조회
+
+**GET** `/api/issue-index/job/:category/articles`
+
+특정 직업 카테고리에 매칭된 기사들의 원문을 조회합니다.
+
+**Path Parameters**:
+- `category` (required): 직업 카테고리
+
+**Query Parameters**:
+- `collected_at` (optional): 특정 시간 조회 (ISO 8601 format), 없으면 최신 데이터
+- `cluster_id` (optional): 특정 클러스터의 기사만 필터링
+- `limit` (optional): 최대 기사 수 (default: 100, max: 1000)
+
+**Response** (200 OK):
+```json
+{
+  "job_category": "기술/개발",
+  "collected_at": "2025-01-01T14:00:00.000Z",
+  "article_count": 100,
+  "total_matched_articles": 234,
+  "articles": [
+    {
+      "index": 0,
+      "cluster_id": "cluster_001",
+      "topic_name": "GPT-5 출시",
+      "title": "OpenAI, GPT-5 공개 발표",
+      "link": "https://news.example.com/article/123",
+      "description": "OpenAI가 차세대 언어모델 GPT-5를 공개했습니다...",
+      "pub_date": "2025-01-01T12:30:00.000Z"
+    },
+    {
+      "index": 4,
+      "cluster_id": "cluster_001",
+      "topic_name": "GPT-5 출시",
+      "title": "GPT-5, 코딩 성능 대폭 향상",
+      "link": "https://news.example.com/article/456",
+      "description": "새로운 GPT-5는 코드 생성 능력이 크게 개선되었습니다...",
+      "pub_date": "2025-01-01T13:15:00.000Z"
+    }
+  ]
+}
+```
+
+**필드 설명**:
+- `article_count`: 현재 응답에 포함된 기사 개수 (limit 적용)
+- `total_matched_articles`: 해당 직업 카테고리에 매칭된 총 기사 개수
+
+**참고**: 
+- 기사는 `article_index` 오름차순으로 정렬됩니다.
+- 동일한 기사가 여러 클러스터에 포함될 수 있지만, 응답에는 첫 번째 클러스터 정보만 포함됩니다.
+
+---
+
+
+
 ## 💬 커뮤니티 API
 
 ### 1. 게시글 작성
