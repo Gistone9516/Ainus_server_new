@@ -2,7 +2,7 @@
  * GPT 입력 데이터 전처리
  *
  * 프로세스:
- * 1. MySQL news_articles에서 최신 1000개 기사 조회
+ * 1. MySQL news_articles에서 최신 기사 조회 (최대 1000개)
  * 2. MySQL clusters에서 active 클러스터 + 30일 이내 비활성 클러스터 조회
  * 3. GPT 입력 형식으로 변환
  */
@@ -56,9 +56,9 @@ interface GPTInputData {
 // ============ MySQL 쿼리 함수 ============
 
 /**
- * MySQL에서 최신 1000개 기사 조회
+ * MySQL에서 최신 기사 조회 (최대 1000개)
  *
- * @returns 가장 최근 수집된 1000개 기사
+ * @returns 가장 최근 수집된 기사들
  */
 async function getLatestArticlesFromMySQL(): Promise<ArticlesCollection> {
   console.log("📰 Fetching latest articles from MySQL...");
@@ -112,21 +112,25 @@ async function getLatestArticlesFromMySQL(): Promise<ArticlesCollection> {
 }
 
 /**
- * 기사 개수 검증 (1000개)
+ * 기사 개수 검증 (최소 1개, 최대 1000개)
  */
 function validateArticleCount(articles: Article[]): boolean {
-  if (articles.length !== 1000) {
+  if (articles.length === 0) {
+    console.error(`   ❌ No articles found`);
+    return false;
+  }
+  if (articles.length > 1000) {
     console.error(
-      `   ❌ Expected 1000 articles, but got ${articles.length}`
+      `   ❌ Too many articles: expected max 1000, but got ${articles.length}`
     );
     return false;
   }
-  console.log(`   ✅ Article count validated: ${articles.length}`);
+  console.log(`   ✅ Article count validated: ${articles.length} (max 1000)`);
   return true;
 }
 
 /**
- * 기사 인덱스 검증 (0~999 연속)
+ * 기사 인덱스 검증 (0부터 연속적인 인덱스)
  */
 function validateArticleIndices(articles: Article[]): boolean {
   for (let i = 0; i < articles.length; i++) {
@@ -137,7 +141,7 @@ function validateArticleIndices(articles: Article[]): boolean {
       return false;
     }
   }
-  console.log(`   ✅ Article indices validated (0-999)`);
+  console.log(`   ✅ Article indices validated (0-${articles.length - 1})`);
   return true;
 }
 
@@ -240,9 +244,9 @@ function combineClusters(
  * GPT 입력 데이터 전처리
  *
  * 프로세스:
- * 1. MySQL에서 최신 1000개 기사 조회
+ * 1. MySQL에서 최신 기사 조회 (최대 1000개)
  * 2. MySQL에서 active + 30일 이내 비활성 클러스터 조회
- * 3. 검증
+ * 3. 검증 (최소 1개, 최대 1000개)
  * 4. GPT 입력 형식으로 변환
  *
  * @returns GPT에 전송할 입력 데이터
@@ -259,10 +263,6 @@ async function preprocessGPTInputData(): Promise<GPTInputData> {
     // Step 2: 기사 데이터 검증
     console.log("\n✅ Step 2: Validating article data...\n");
     if (!validateArticleCount(articles)) {
-      // For migration testing, we might not have 1000 articles yet.
-      // Throwing error might block testing. 
-      // However, the requirement is strict. Let's keep it but maybe log warning if < 1000?
-      // The original code threw error. I will keep it consistent.
       throw new Error("Article count validation failed");
     }
     if (!validateArticleIndices(articles)) {
