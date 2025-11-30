@@ -212,15 +212,75 @@ function extractJSONFromResponse(rawResponse: string): GPTClusterOutput[] {
 }
 
 /**
+ * GPT 출력 정제 (중복 제거 및 유효성 보정)
+ * 
+ * - 중복된 기사 인덱스 제거 (첫 번째 할당만 유지)
+ * - 유효 범위를 벗어난 인덱스 제거
+ * - article_count를 실제 article_indices 길이로 보정
+ * 
+ * @param clusters 파싱된 클러스터 배열
+ * @param maxArticleIndex 최대 유효 인덱스 (기사 수 - 1)
+ * @returns 정제된 클러스터 배열
+ */
+function sanitizeGPTOutput(clusters: GPTClusterOutput[], maxArticleIndex: number): GPTClusterOutput[] {
+  console.log("🧹 Sanitizing GPT output...");
+  
+  const usedIndices = new Set<number>();
+  let duplicatesRemoved = 0;
+  let invalidIndicesRemoved = 0;
+  
+  const sanitizedClusters = clusters.map((cluster) => {
+    const validIndices: number[] = [];
+    
+    cluster.article_indices.forEach((idx) => {
+      // 유효 범위 체크 (0 ~ maxArticleIndex)
+      if (idx < 0 || idx > maxArticleIndex) {
+        invalidIndicesRemoved++;
+        return;
+      }
+      
+      // 중복 체크
+      if (usedIndices.has(idx)) {
+        duplicatesRemoved++;
+        return;
+      }
+      
+      usedIndices.add(idx);
+      validIndices.push(idx);
+    });
+    
+    return {
+      ...cluster,
+      article_indices: validIndices,
+      article_count: validIndices.length,
+    };
+  });
+  
+  // 기사가 없는 클러스터 제거
+  const nonEmptyClusters = sanitizedClusters.filter(c => c.article_indices.length > 0);
+  const emptyClustersRemoved = sanitizedClusters.length - nonEmptyClusters.length;
+  
+  console.log(`   ✅ Sanitization complete:`);
+  console.log(`      - Duplicate indices removed: ${duplicatesRemoved}`);
+  console.log(`      - Invalid indices removed: ${invalidIndicesRemoved}`);
+  console.log(`      - Empty clusters removed: ${emptyClustersRemoved}`);
+  console.log(`      - Final clusters: ${nonEmptyClusters.length}\n`);
+  
+  return nonEmptyClusters;
+}
+
+/**
  * Assistant 출력 검증
  *
- * 검사 항목:
+ * 검사 항목 (에러 - 파이프라인 중단):
  * - cluster_id, topic_name, tags 필수
  * - tags는 정확히 5개
  * - article_indices와 article_count 일치
- * - 모든 기사가 할당됨 (입력 기사 수와 일치)
  * - 중복 인덱스 없음
  * - appearance_count는 양수
+ * 
+ * 검사 항목 (경고 - 파이프라인 계속):
+ * - 일부 기사가 할당되지 않음 (입력 기사 수와 불일치)
  *
  * @param clusters 파싱된 클러스터 배열
  * @param expectedArticleCount 입력된 기사 수
@@ -229,10 +289,12 @@ function extractJSONFromResponse(rawResponse: string): GPTClusterOutput[] {
 function validateGPTOutput(clusters: GPTClusterOutput[], expectedArticleCount: number): {
   isValid: boolean;
   errors: string[];
+  warnings: string[];
 } {
   console.log("🔍 Validating GPT output...");
 
   const errors: string[] = [];
+  const warnings: string[] = [];
 
   // 빈 배열 체크
   if (clusters.length === 0) {
@@ -304,22 +366,29 @@ function validateGPTOutput(clusters: GPTClusterOutput[], expectedArticleCount: n
     totalArticles += cluster.article_indices.length;
   });
 
-  // 총 기사 수 체크 (입력된 기사 수와 일치해야 함)
+  // 총 기사 수 체크 (경고 - 일부 기사 누락은 허용)
   if (totalArticles !== expectedArticleCount) {
-    errors.push(`Total articles ${totalArticles}, expected ${expectedArticleCount}`);
+    const diff = expectedArticleCount - totalArticles;
+    warnings.push(`${diff} articles not classified (${totalArticles}/${expectedArticleCount})`);
   }
 
   const isValid = errors.length === 0;
 
-  if (isValid) {
+  if (isValid && warnings.length === 0) {
     console.log("   ✅ All validations passed\n");
   } else {
-    console.log(`   ❌ ${errors.length} validation errors found:`);
-    errors.forEach((error) => console.log(`      - ${error}`));
+    if (errors.length > 0) {
+      console.log(`   ❌ ${errors.length} validation errors found:`);
+      errors.forEach((error) => console.log(`      - ${error}`));
+    }
+    if (warnings.length > 0) {
+      console.log(`   ⚠️ ${warnings.length} warnings:`);
+      warnings.forEach((warning) => console.log(`      - ${warning}`));
+    }
     console.log("");
   }
 
-  return { isValid, errors };
+  return { isValid, errors, warnings };
 }
 
 // ============ 메인 함수 ============
@@ -330,8 +399,9 @@ function validateGPTOutput(clusters: GPTClusterOutput[], expectedArticleCount: n
  * 프로세스:
  * 1. Assistants API 호출
  * 2. 응답 파싱
- * 3. 검증
- * 4. 최종 결과 반환
+ * 3. GPT 출력 정제 (중복 제거 및 유효성 보정)
+ * 4. 검증
+ * 5. 최종 결과 반환
  *
  * @param gptInput 전처리된 입력 데이터
  * @returns 최종 분류 결과
@@ -350,9 +420,12 @@ async function classifyNewsWithGPT(
     // Step 2: JSON 응답 파싱
     const parsedClusters = extractJSONFromResponse(result.raw_response);
 
-    // Step 3: 검증 (입력된 기사 수 기준)
+    // Step 3: GPT 출력 정제 (중복 제거 및 유효성 보정)
     const expectedArticleCount = gptInput.new_articles.length;
-    const validation = validateGPTOutput(parsedClusters, expectedArticleCount);
+    const sanitizedClusters = sanitizeGPTOutput(parsedClusters, expectedArticleCount - 1);
+
+    // Step 4: 검증 (입력된 기사 수 기준)
+    const validation = validateGPTOutput(sanitizedClusters, expectedArticleCount);
 
     if (!validation.isValid) {
       console.error("\n❌ Validation failed!");
@@ -362,9 +435,15 @@ async function classifyNewsWithGPT(
       );
     }
 
-    // Step 4: 최종 결과 반환
+    // 경고가 있어도 파이프라인은 계속 진행
+    if (validation.warnings.length > 0) {
+      console.warn("\n⚠️ Validation warnings (pipeline continues):");
+      validation.warnings.forEach((w) => console.warn(`   - ${w}`));
+    }
+
+    // Step 5: 최종 결과 반환
     const finalResult: GPTClassificationResult = {
-      clusters: parsedClusters,
+      clusters: sanitizedClusters,
       raw_response: result.raw_response,
       processed_at: result.processed_at,
     };
@@ -389,6 +468,7 @@ export {
   classifyNewsWithGPT,
   callAssistantClassifier,
   extractJSONFromResponse,
+  sanitizeGPTOutput,
   validateGPTOutput,
   GPTClassificationResult,
   GPTClusterOutput,

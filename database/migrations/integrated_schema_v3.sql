@@ -307,6 +307,37 @@ CREATE TABLE IF NOT EXISTS issue_index (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='통합 AI 이슈 지수 (1시간마다)';
 
+-- job_issue_index: 직업별 이슈 지수 (시간별)
+CREATE TABLE IF NOT EXISTS job_issue_index (
+  job_category VARCHAR(100) NOT NULL COMMENT '직업 카테고리명',
+  collected_at DATETIME NOT NULL COMMENT '수집 시간 (1시간 단위)',
+  issue_index DECIMAL(5,1) NOT NULL COMMENT '직업별 이슈 지수 (0-100)',
+  active_clusters_count INT DEFAULT 0 COMMENT 'active 클러스터 개수',
+  inactive_clusters_count INT DEFAULT 0 COMMENT 'inactive 클러스터 개수',
+  total_articles_count INT DEFAULT 0 COMMENT '관련 기사 개수',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+  PRIMARY KEY (job_category, collected_at),
+  INDEX idx_collected_at (collected_at DESC),
+  INDEX idx_job_category (job_category),
+  INDEX idx_issue_index (issue_index DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='직업별 AI 이슈 지수 (1시간마다, 13개 직업)';
+
+-- job_cluster_mapping: 직업-클러스터 매핑 (이슈 지수 계산용)
+CREATE TABLE IF NOT EXISTS job_cluster_mapping (
+  mapping_id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '매핑 ID',
+  job_category VARCHAR(100) NOT NULL COMMENT '직업 카테고리명',
+  collected_at DATETIME NOT NULL COMMENT '수집 시간',
+  cluster_id VARCHAR(50) NOT NULL COMMENT '클러스터 ID',
+  match_ratio DECIMAL(5,4) NOT NULL COMMENT '매칭 비율 (0-1)',
+  weighted_score DECIMAL(10,4) NOT NULL COMMENT '가중 점수',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
+  INDEX idx_job_collected (job_category, collected_at),
+  INDEX idx_cluster_id (cluster_id),
+  INDEX idx_collected_at (collected_at DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT='직업-클러스터 매핑 (이슈 지수 계산 근거)';
+
 -- ============================================
 -- SECTION 6: 뉴스 및 태그
 -- ============================================

@@ -105,14 +105,18 @@ async function startServer(): Promise<void> {
 
     // ============ 서버 시작 ============
 
-    const server = app.listen(config.port, () => {
+    // 모든 네트워크 인터페이스에서 수신 (0.0.0.0)
+    // 이렇게 해야 로컬 네트워크의 다른 기기(모바일 앱 등)에서 접근 가능
+    const server = app.listen(config.port, '0.0.0.0', () => {
       logger.info(`Server running on port ${config.port}`);
       logger.info(
         `API Documentation: http://localhost:${config.port}/api/docs`
       );
 
       console.log("=".repeat(70));
-      console.log(`✅ Server is running on http://localhost:${config.port}`);
+      console.log(`✅ Server is running on http://0.0.0.0:${config.port}`);
+      console.log(`   - Local: http://localhost:${config.port}`);
+      console.log(`   - Network: http://192.168.x.x:${config.port}`);
       console.log("=".repeat(70) + "\n");
     });
 

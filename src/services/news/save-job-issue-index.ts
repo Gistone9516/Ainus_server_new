@@ -14,6 +14,17 @@ import { PoolConnection, RowDataPacket } from 'mysql2/promise';
 
 const logger = new Logger('SaveJobIssueIndex');
 
+// ============ 헬퍼 함수 ============
+
+/**
+ * ISO 8601 문자열을 MySQL DATETIME 형식으로 변환
+ * '2025-11-30T17:00:46.419Z' → '2025-11-30 17:00:46'
+ */
+function toMySQLDatetime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ============ Type 정의 ============
 
 interface ClusterMatch {
@@ -61,7 +72,7 @@ async function calculateTotalArticlesCount(
       AND cluster_id IN (${placeholders})
   `;
 
-  const params = [collectedAt, ...clusterIds];
+  const params = [toMySQLDatetime(collectedAt), ...clusterIds];
   const [rows] = await connection.query<RowDataPacket[]>(query, params);
 
   // 모든 article_indices를 병합하여 중복 제거
@@ -102,7 +113,7 @@ async function saveJobIssueIndex(
 
   const params = [
     result.job_category,
-    result.collected_at,
+    toMySQLDatetime(result.collected_at),
     result.issue_index,
     result.active_clusters_count,
     result.inactive_clusters_count,
@@ -132,7 +143,7 @@ async function saveJobClusterMappings(
     DELETE FROM job_cluster_mapping
     WHERE job_category = ? AND collected_at = ?
   `;
-  await connection.query(deleteQuery, [jobCategory, collectedAt]);
+  await connection.query(deleteQuery, [jobCategory, toMySQLDatetime(collectedAt)]);
 
   // 배치 삽입
   const insertQuery = `
@@ -145,9 +156,10 @@ async function saveJobClusterMappings(
     ) VALUES ?
   `;
 
+  const mysqlDatetime = toMySQLDatetime(collectedAt);
   const values = clusterMatches.map((match) => [
     jobCategory,
-    collectedAt,
+    mysqlDatetime,
     match.cluster_id,
     match.match_ratio,
     match.weighted_score,

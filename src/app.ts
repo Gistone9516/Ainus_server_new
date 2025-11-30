@@ -4,6 +4,7 @@
  */
 
 import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import { getConfig } from './config/environment';
 import { errorHandler, asyncHandler } from './middleware/errorHandler';
 import { createGlobalRateLimiter } from './middleware/rateLimiter';
@@ -24,6 +25,58 @@ const logger = new Logger('App');
 export function createApp(): Express {
   const app = express();
   const config = getConfig();
+
+  // CORS 설정
+  const allowedOrigins = [
+    // localhost 기본
+    'http://localhost',
+    'https://localhost',
+    // localhost 포트별
+    'http://localhost:3000',
+    'http://localhost:5173',  // Vite 기본 포트
+    'http://localhost:8080',  // Vue CLI 등
+    // 127.0.0.1 IP 접근
+    'http://127.0.0.1',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:8080',
+    // Capacitor (모바일 앱)
+    'capacitor://localhost'
+  ];
+
+  // 개발/테스트 환경 여부 확인
+  const isDevOrTest = config.nodeEnv === 'development' || config.nodeEnv === 'test';
+  
+  // CORS origin 설정 함수
+  const corsOriginHandler = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // 개발/테스트 환경에서는 모든 origin 허용
+    if (isDevOrTest) {
+      callback(null, true);
+      return;
+    }
+    
+    // origin이 없는 경우 (서버 간 요청, Postman 등) 허용
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // 허용된 origin 목록에 있는지 확인
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    
+    // 그 외는 차단
+    callback(new Error('CORS policy violation'));
+  };
+
+  app.use(cors({
+    origin: corsOriginHandler,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Workflow-ID']
+  }));
 
   // 요청 본문 파싱
   app.use(express.json());

@@ -56,6 +56,15 @@ interface GPTClassificationResult {
 // ============ 헬퍼 함수 ============
 
 /**
+ * ISO 8601 문자열을 MySQL DATETIME 형식으로 변환
+ * '2025-11-30T17:00:46.419Z' → '2025-11-30 17:00:46'
+ */
+function toMySQLDatetime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
  * 기존 클러스터 조회
  */
 async function getExistingClusters(): Promise<ClusterDocument[]> {
@@ -174,7 +183,7 @@ async function updateExistingCluster(
   `;
   await connection.execute(historySql, [
     gptCluster.cluster_id,
-    collectedAt,
+    toMySQLDatetime(collectedAt),
     JSON.stringify(gptCluster.article_indices),
     gptCluster.article_count
   ]);
@@ -211,7 +220,7 @@ async function createNewCluster(
   `;
   await connection.execute(historySql, [
     gptCluster.cluster_id,
-    collectedAt,
+    toMySQLDatetime(collectedAt),
     JSON.stringify(gptCluster.article_indices),
     gptCluster.article_count
   ]);
@@ -252,7 +261,7 @@ async function deactivateMissingClusters(
         VALUES (?, ?, ?, ?, ?, 0, '[]', 'inactive', 0)
       `;
       await connection.execute(inactiveSnapshotSql, [
-        collectedAt,
+        toMySQLDatetime(collectedAt),
         cluster.cluster_id,
         cluster.topic_name,
         typeof cluster.tags === 'string' ? cluster.tags : JSON.stringify(cluster.tags),
@@ -281,7 +290,7 @@ async function saveClusterSnapshots(
 
   for (const cluster of gptClusters) {
     await connection.execute(sql, [
-      collectedAt,
+      toMySQLDatetime(collectedAt),
       cluster.cluster_id,
       cluster.topic_name,
       JSON.stringify(cluster.tags),
@@ -391,7 +400,7 @@ async function getClusterSnapshots(collectedAt: string): Promise<ClusterSnapshot
     SELECT * FROM cluster_snapshots
     WHERE collected_at = ?
   `;
-  const rows = await executeQuery<any>(sql, [collectedAt]);
+  const rows = await executeQuery<any>(sql, [toMySQLDatetime(collectedAt)]);
 
   return rows.map((row: any) => ({
     collected_at: row.collected_at instanceof Date ? row.collected_at.toISOString() : row.collected_at,

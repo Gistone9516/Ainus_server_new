@@ -5,6 +5,17 @@
 import { executeQuery, executeModify, getDatabasePool } from "../../database/mysql";
 import { PoolConnection } from "mysql2/promise";
 
+// ============ 헬퍼 함수 ============
+
+/**
+ * ISO 8601 문자열을 MySQL DATETIME 형식으로 변환
+ * '2025-11-30T17:00:46.419Z' → '2025-11-30 17:00:46'
+ */
+function toMySQLDatetime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ============ Type 정의 ============
 
 interface IssueIndexData {
@@ -49,7 +60,7 @@ async function saveIssueIndexToMySQL(data: IssueIndexData): Promise<void> {
     `;
 
     await executeModify(query, [
-      data.collected_at,
+      toMySQLDatetime(data.collected_at),
       data.overall_index,
       data.active_clusters_count,
       data.inactive_clusters_count,
@@ -129,7 +140,7 @@ async function getIssueIndexByDate(collectedAt: string): Promise<IssueIndexData 
       LIMIT 1
     `;
 
-    const rows = await executeQuery<any>(query, [collectedAt]);
+    const rows = await executeQuery<any>(query, [toMySQLDatetime(collectedAt)]);
 
     if (rows.length > 0) {
       const row = rows[0];
@@ -175,7 +186,7 @@ async function getIssueIndexByDateRange(
       ORDER BY collected_at DESC
     `;
 
-    const rows = await executeQuery<any>(query, [startDate, endDate]);
+    const rows = await executeQuery<any>(query, [toMySQLDatetime(startDate), toMySQLDatetime(endDate)]);
 
     const results = rows.map((row: any) => ({
       collected_at: row.collected_at instanceof Date ? row.collected_at.toISOString() : row.collected_at,
