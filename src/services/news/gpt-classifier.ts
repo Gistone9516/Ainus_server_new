@@ -5,7 +5,7 @@
  * (사전 프롬프트가 이미 입력되어 있음)
  *
  * 역할:
- * - 1000개 뉴스를 주제별로 분류
+ * - 입력된 뉴스를 주제별로 분류 (최대 1000개)
  * - 40개 표준 태그 중 5개씩 할당
  * - 모든 기사를 정확히 하나의 클러스터에 할당
  */
@@ -218,14 +218,15 @@ function extractJSONFromResponse(rawResponse: string): GPTClusterOutput[] {
  * - cluster_id, topic_name, tags 필수
  * - tags는 정확히 5개
  * - article_indices와 article_count 일치
- * - 모든 기사(0~999) 할당됨
+ * - 모든 기사가 할당됨 (입력 기사 수와 일치)
  * - 중복 인덱스 없음
  * - appearance_count는 양수
  *
  * @param clusters 파싱된 클러스터 배열
+ * @param expectedArticleCount 입력된 기사 수
  * @returns 검증 결과
  */
-function validateGPTOutput(clusters: GPTClusterOutput[]): {
+function validateGPTOutput(clusters: GPTClusterOutput[], expectedArticleCount: number): {
   isValid: boolean;
   errors: string[];
 } {
@@ -303,9 +304,9 @@ function validateGPTOutput(clusters: GPTClusterOutput[]): {
     totalArticles += cluster.article_indices.length;
   });
 
-  // 총 기사 수 체크 (0~999, 총 1000개)
-  if (totalArticles !== 1000) {
-    errors.push(`Total articles ${totalArticles}, expected 1000`);
+  // 총 기사 수 체크 (입력된 기사 수와 일치해야 함)
+  if (totalArticles !== expectedArticleCount) {
+    errors.push(`Total articles ${totalArticles}, expected ${expectedArticleCount}`);
   }
 
   const isValid = errors.length === 0;
@@ -349,8 +350,9 @@ async function classifyNewsWithGPT(
     // Step 2: JSON 응답 파싱
     const parsedClusters = extractJSONFromResponse(result.raw_response);
 
-    // Step 3: 검증
-    const validation = validateGPTOutput(parsedClusters);
+    // Step 3: 검증 (입력된 기사 수 기준)
+    const expectedArticleCount = gptInput.new_articles.length;
+    const validation = validateGPTOutput(parsedClusters, expectedArticleCount);
 
     if (!validation.isValid) {
       console.error("\n❌ Validation failed!");
