@@ -51,6 +51,7 @@ interface PreviousCluster {
 interface GPTInputData {
   new_articles: Array<{ index: number; title: string }>;
   previous_clusters: PreviousCluster[];
+  articles_collected_at: string; // 기사가 실제로 수집된 시간 (news_articles.collected_at)
 }
 
 // ============ MySQL 쿼리 함수 ============
@@ -291,11 +292,13 @@ async function preprocessGPTInputData(): Promise<GPTInputData> {
     const gptInput: GPTInputData = {
       new_articles: newArticles,
       previous_clusters: previousClusters,
+      articles_collected_at: articlesCollection.collected_at, // 기사의 실제 수집 시간
     };
 
     console.log("========== Preprocessing Complete ==========");
     console.log(`✅ New articles: ${gptInput.new_articles.length}`);
-    console.log(`✅ Previous clusters: ${gptInput.previous_clusters.length}\n`);
+    console.log(`✅ Previous clusters: ${gptInput.previous_clusters.length}`);
+    console.log(`✅ Articles collected at: ${gptInput.articles_collected_at}\n`);
 
     return gptInput;
   } catch (error) {

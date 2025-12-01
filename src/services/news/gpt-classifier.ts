@@ -27,6 +27,7 @@ interface GPTInputData {
     appearance_count: number;
     status: "active" | "inactive";
   }>;
+  articles_collected_at: string; // 기사가 실제로 수집된 시간
 }
 
 interface GPTClusterOutput {
@@ -42,6 +43,7 @@ interface GPTClassificationResult {
   clusters: GPTClusterOutput[];
   raw_response: string;
   processed_at: string;
+  articles_collected_at: string; // 기사가 실제로 수집된 시간
 }
 
 // ============ OpenAI 클라이언트 초기화 ============
@@ -168,6 +170,7 @@ async function callAssistantClassifier(
       clusters: [],
       raw_response: rawResponse,
       processed_at: new Date().toISOString(),
+      articles_collected_at: gptInput.articles_collected_at, // 기사의 실제 수집 시간 전달
     };
   } catch (error) {
     console.error("❌ Error calling Assistant:", error);
@@ -446,6 +449,7 @@ async function classifyNewsWithGPT(
       clusters: sanitizedClusters,
       raw_response: result.raw_response,
       processed_at: result.processed_at,
+      articles_collected_at: gptInput.articles_collected_at, // 기사의 실제 수집 시간 전달
     };
 
     console.log("\n✅ Classification completed successfully!");
@@ -453,6 +457,7 @@ async function classifyNewsWithGPT(
     console.log(
       `   - Total articles classified: ${finalResult.clusters.reduce((sum, c) => sum + c.article_count, 0)}`
     );
+    console.log(`   - Articles collected at: ${finalResult.articles_collected_at}`);
     console.log("");
 
     return finalResult;

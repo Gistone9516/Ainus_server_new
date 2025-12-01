@@ -81,6 +81,39 @@ function applyExponentialDecay(baseScore: number, daysPassed: number): number {
 }
 
 /**
+ * 문자열 또는 JSON 배열을 파싱하여 배열로 반환
+ * - 이미 배열인 경우: 그대로 반환
+ * - JSON 배열 문자열인 경우: JSON.parse로 파싱
+ * - 쉼표로 구분된 문자열인 경우: split으로 분리
+ */
+function parseArrayField(value: any): any[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  
+  if (typeof value !== 'string' || !value || value.trim() === '') {
+    return [];
+  }
+  
+  const trimmed = value.trim();
+  
+  // JSON 배열 형식인 경우 (시작이 '[')
+  if (trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      // JSON 파싱 실패 시 쉼표 분리로 폴백
+    }
+  }
+  
+  // 쉼표로 구분된 문자열 처리
+  return trimmed
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item !== '');
+}
+
+/**
  * cluster_snapshots에서 최신 스냅샷 조회
  */
 async function getLatestClusterSnapshots(
@@ -107,10 +140,10 @@ async function getLatestClusterSnapshots(
   return rows.map((row) => ({
     cluster_id: row.cluster_id,
     topic_name: row.topic_name,
-    tags: JSON.parse(row.tags),
+    tags: parseArrayField(row.tags),
     appearance_count: row.appearance_count,
     article_count: row.article_count,
-    article_indices: JSON.parse(row.article_indices),
+    article_indices: parseArrayField(row.article_indices),
     status: row.status,
     cluster_score: parseFloat(row.cluster_score),
     collected_at: row.collected_at,

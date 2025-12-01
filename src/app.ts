@@ -122,19 +122,19 @@ export function createApp(): Express {
     });
   }));
 
-  // 라우트 마운트
-  app.use('/api/v1/auth', authRouter);
-  app.use('/api/v1/community', communityRouter);
-  app.use('/api/v1/models', modelsRouter);
-  app.use('/api/v1/updates', updateRouter);
-  app.use('/api/v1/creators', creatorRouter);
-  app.use('/api/v1/job-categories', jobCategoryRouter);
-  app.use('/api/v1/news-tagging', newsTaggingRouter);
-  app.use('/api/v1/tasks', tasksRouter);
+  // 라우트 마운트 (v1 제거하여 /api/... 로 통일)
+  app.use('/api/auth', authRouter);
+  app.use('/api/community', communityRouter);
+  app.use('/api/models', modelsRouter);
+  app.use('/api/updates', updateRouter);
+  app.use('/api/creators', creatorRouter);
+  app.use('/api/job-categories', jobCategoryRouter);
+  app.use('/api/news-tagging', newsTaggingRouter);
+  app.use('/api/tasks', tasksRouter);
   app.use('/api/issue-index', newsRouter);
   app.use('/api/issue-index', jobNewsRouter);
-  app.use('/api/v1/comparison', comparisonRouter); 
-  app.use('/api/v1/timeline', timelineRouter);
+  app.use('/api/comparison', comparisonRouter);
+  app.use('/api/timeline', timelineRouter);
 
   // 404 핸들러
   app.use((req: Request, res: Response) => {

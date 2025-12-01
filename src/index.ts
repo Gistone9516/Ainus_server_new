@@ -7,7 +7,11 @@
  * 2. AI 뉴스 클러스터링 & 이슈 지수 시스템
  */
 
-import "module-alias/register";
+// Development: tsconfig-paths handles path aliases via ts-node -r tsconfig-paths/register
+// Production: module-alias handles path aliases after compilation
+if (process.env.NODE_ENV === 'production') {
+  require('module-alias/register');
+}
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import { createApp } from "./app";

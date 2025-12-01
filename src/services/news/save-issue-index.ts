@@ -204,6 +204,98 @@ async function getIssueIndexByDateRange(
   }
 }
 
+// ============ 데이터 가용성 조회 ============
+
+interface DataAvailability {
+  oldest_date: string | null;
+  latest_date: string | null;
+  total_snapshots: number;
+  collection_frequency: string;
+  available_dates: string[];
+}
+
+/**
+ * 데이터 가용성 정보 조회
+ * 
+ * @returns 가용 데이터 범위 및 날짜 목록
+ */
+async function getDataAvailability(): Promise<DataAvailability> {
+  console.log("🔍 Fetching data availability...");
+
+  try {
+    // 전체 스냅샷 수 및 날짜 범위 조회
+    const summaryQuery = `
+      SELECT 
+        MIN(collected_at) as oldest_date,
+        MAX(collected_at) as latest_date,
+        COUNT(*) as total_snapshots
+      FROM issue_index
+    `;
+    const summaryRows = await executeQuery<any>(summaryQuery);
+    const summary = summaryRows[0];
+
+    // 데이터가 있는 날짜 목록 조회 (날짜만 추출, 중복 제거)
+    const datesQuery = `
+      SELECT DISTINCT DATE(collected_at) as date
+      FROM issue_index
+      ORDER BY date DESC
+    `;
+    const dateRows = await executeQuery<any>(datesQuery);
+    
+    const availableDates = dateRows.map((row: any) => {
+      const date = row.date instanceof Date ? row.date : new Date(row.date);
+      return date.toISOString().split('T')[0];
+    });
+
+    const result: DataAvailability = {
+      oldest_date: summary.oldest_date 
+        ? (summary.oldest_date instanceof Date ? summary.oldest_date.toISOString().split('T')[0] : summary.oldest_date.split('T')[0])
+        : null,
+      latest_date: summary.latest_date 
+        ? (summary.latest_date instanceof Date ? summary.latest_date.toISOString().split('T')[0] : summary.latest_date.split('T')[0])
+        : null,
+      total_snapshots: summary.total_snapshots || 0,
+      collection_frequency: "daily",
+      available_dates: availableDates
+    };
+
+    console.log(`   ✅ Data availability: ${result.total_snapshots} snapshots, ${availableDates.length} dates`);
+    return result;
+  } catch (error) {
+    console.error("❌ Error fetching data availability:", error);
+    throw error;
+  }
+}
+
+/**
+ * 날짜 범위 내에서 누락된 날짜 계산
+ * 
+ * @param startDate 시작 날짜 (YYYY-MM-DD)
+ * @param endDate 종료 날짜 (YYYY-MM-DD)
+ * @param existingDates 실제 데이터가 있는 날짜들
+ * @returns 누락된 날짜 배열
+ */
+function calculateMissingDates(
+  startDate: string,
+  endDate: string,
+  existingDates: string[]
+): string[] {
+  const existingSet = new Set(existingDates.map(d => d.split('T')[0]));
+  const missingDates: string[] = [];
+  
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    if (!existingSet.has(dateStr)) {
+      missingDates.push(dateStr);
+    }
+  }
+  
+  return missingDates;
+}
+
 // ============ Export ============
 
 export {
@@ -211,5 +303,8 @@ export {
   getLatestIssueIndex,
   getIssueIndexByDate,
   getIssueIndexByDateRange,
+  getDataAvailability,
+  calculateMissingDates,
   IssueIndexData,
+  DataAvailability,
 };

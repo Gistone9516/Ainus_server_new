@@ -19,45 +19,30 @@ import {
 
 const router = Router();
 
-/**
- * GET /api/timeline/:series
- * 특정 모델 시리즈의 타임라인 조회
- * 
- * Path Parameters:
- * - series: 시리즈 이름 (예: GPT, Claude, Gemini)
- * 
- * Query Parameters:
- * - limit: 조회 개수 (기본: 20, 최대: 50)
- */
-router.get('/:series', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { series } = req.params;
-    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
-    const parsedLimit = limitParam ? parseInt(limitParam as string, 10) : 20;
-    const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 50));
+// 중요: Express 라우트는 정의 순서대로 매칭됩니다.
+// 구체적인 라우트를 먼저 정의하고, 동적 라우트(/:series)는 마지막에 정의해야 합니다.
 
-    const timeline = await getModelTimeline(series, limit);
+/**
+ * GET /api/timeline/series
+ * 사용 가능한 모델 시리즈 목록 조회
+ */
+router.get('/series', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const series = await getAvailableSeries();
 
     res.json({
       success: true,
-      data: timeline
+      count: series.length,
+      data: series
     });
     return;
 
   } catch (error: any) {
-    console.error('타임라인 조회 오류:', error);
+    console.error('시리즈 목록 조회 오류:', error);
     
-    if (typeof error.message === 'string' && error.message.includes('찾을 수 없습니다')) {
-      res.status(404).json({
-        success: false,
-        error: error.message
-      });
-      return;
-    }
-
     res.status(500).json({
       success: false,
-      error: '타임라인 조회 중 오류가 발생했습니다',
+      error: '시리즈 목록 조회 중 오류가 발생했습니다',
       details: error.message
     });
     return;
@@ -226,26 +211,47 @@ router.get('/benchmark/:series/:benchmark', async (req: Request, res: Response):
 });
 
 /**
- * GET /api/timeline/series
- * 사용 가능한 모델 시리즈 목록 조회
+ * GET /api/timeline/:series
+ * 특정 모델 시리즈의 타임라인 조회
+ * 
+ * 중요: 이 라우트는 반드시 마지막에 정의해야 합니다!
+ * (/:series가 /series, /compare, /events 등을 먼저 매칭하지 않도록)
+ * 
+ * Path Parameters:
+ * - series: 시리즈 이름 (예: GPT, Claude, Gemini)
+ * 
+ * Query Parameters:
+ * - limit: 조회 개수 (기본: 20, 최대: 50)
  */
-router.get('/series', async (req: Request, res: Response): Promise<void> => {
+router.get('/:series', async (req: Request, res: Response): Promise<void> => {
   try {
-    const series = await getAvailableSeries();
+    const { series } = req.params;
+    const limitParam = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+    const parsedLimit = limitParam ? parseInt(limitParam as string, 10) : 20;
+    const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 50));
+
+    const timeline = await getModelTimeline(series, limit);
 
     res.json({
       success: true,
-      count: series.length,
-      data: series
+      data: timeline
     });
     return;
 
   } catch (error: any) {
-    console.error('시리즈 목록 조회 오류:', error);
+    console.error('타임라인 조회 오류:', error);
     
+    if (typeof error.message === 'string' && error.message.includes('찾을 수 없습니다')) {
+      res.status(404).json({
+        success: false,
+        error: error.message
+      });
+      return;
+    }
+
     res.status(500).json({
       success: false,
-      error: '시리즈 목록 조회 중 오류가 발생했습니다',
+      error: '타임라인 조회 중 오류가 발생했습니다',
       details: error.message
     });
     return;

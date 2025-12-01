@@ -34,6 +34,7 @@ interface ClusterSnapshot {
   appearance_count: number;
   article_count: number;
   article_indices: number[];
+  article_collected_at: string | null; // 기사 인덱스가 참조하는 수집 시간
   status: "active" | "inactive";
   cluster_score: number;
 }
@@ -51,6 +52,7 @@ interface GPTClassificationResult {
   clusters: GPTClusterOutput[];
   raw_response: string;
   processed_at: string;
+  articles_collected_at: string; // 기사가 실제로 수집된 시간 (news_articles.collected_at)
 }
 
 // ============ 헬퍼 함수 ============
@@ -151,12 +153,15 @@ function calculateClusterScore(appearanceCount: number): number {
  * 기존 클러스터 업데이트
  * - clusters 테이블 업데이트
  * - cluster_history 테이블에 새 항목 추가
+ * 
+ * @param articlesCollectedAt 기사가 실제로 수집된 시간 (news_articles.collected_at)
  */
 async function updateExistingCluster(
   connection: PoolConnection,
   existingCluster: ClusterDocument,
   gptCluster: GPTClusterOutput,
-  collectedAt: string
+  collectedAt: string,
+  articlesCollectedAt: string
 ): Promise<void> {
   // 1. Update clusters table
   const updateSql = `
@@ -177,13 +182,14 @@ async function updateExistingCluster(
   ]);
 
   // 2. Insert into cluster_history
+  // ⚠️ collected_at에 기사의 실제 수집 시간을 저장 (비활성 클러스터 기사 조회용)
   const historySql = `
     INSERT INTO cluster_history (cluster_id, collected_at, article_indices, article_count)
     VALUES (?, ?, ?, ?)
   `;
   await connection.execute(historySql, [
     gptCluster.cluster_id,
-    toMySQLDatetime(collectedAt),
+    toMySQLDatetime(articlesCollectedAt), // 기사의 실제 수집 시간
     JSON.stringify(gptCluster.article_indices),
     gptCluster.article_count
   ]);
@@ -195,11 +201,14 @@ async function updateExistingCluster(
 
 /**
  * 새로운 클러스터 생성
+ * 
+ * @param articlesCollectedAt 기사가 실제로 수집된 시간 (news_articles.collected_at)
  */
 async function createNewCluster(
   connection: PoolConnection,
   gptCluster: GPTClusterOutput,
-  collectedAt: string
+  collectedAt: string,
+  articlesCollectedAt: string
 ): Promise<void> {
   // 1. Insert into clusters table
   const insertSql = `
@@ -214,13 +223,14 @@ async function createNewCluster(
   ]);
 
   // 2. Insert into cluster_history
+  // ⚠️ collected_at에 기사의 실제 수집 시간을 저장 (비활성 클러스터 기사 조회용)
   const historySql = `
     INSERT INTO cluster_history (cluster_id, collected_at, article_indices, article_count)
     VALUES (?, ?, ?, ?)
   `;
   await connection.execute(historySql, [
     gptCluster.cluster_id,
-    toMySQLDatetime(collectedAt),
+    toMySQLDatetime(articlesCollectedAt), // 기사의 실제 수집 시간
     JSON.stringify(gptCluster.article_indices),
     gptCluster.article_count
   ]);
@@ -231,7 +241,10 @@ async function createNewCluster(
 /**
  * 비활성 클러스터 처리
  * - GPT 출력에 없는 기존 클러스터를 inactive로 변경
- * - Cluster_Snapshots에 비활성 기록 저장
+ * - Cluster_Snapshots에 비활성 기록 저장 (마지막 기사 데이터 유지)
+ * 
+ * ⚠️ 중요: 비활성 클러스터도 마지막으로 사용된 기사 인덱스를 유지해야 함
+ *    이슈 지수 산출의 근거로 남기기 위함
  */
 async function deactivateMissingClusters(
   connection: PoolConnection,
@@ -254,21 +267,55 @@ async function deactivateMissingClusters(
         [cluster.cluster_id]
       );
 
-      // 2. Insert inactive snapshot
+      // 2. cluster_history에서 가장 최근 기사 데이터 조회
+      // 비활성화되더라도 마지막 기사 인덱스를 유지하여 이슈 지수 산출 근거로 남김
+      const [historyRows] = await connection.execute<any>(
+        `SELECT collected_at, article_indices, article_count 
+         FROM cluster_history 
+         WHERE cluster_id = ? 
+         ORDER BY collected_at DESC 
+         LIMIT 1`,
+        [cluster.cluster_id]
+      );
+
+      let articleIndices = '[]';
+      let articleCount = 0;
+      let articleCollectedAt: string | null = null;
+
+      if (historyRows.length > 0) {
+        const lastHistory = historyRows[0];
+        articleIndices = typeof lastHistory.article_indices === 'string' 
+          ? lastHistory.article_indices 
+          : JSON.stringify(lastHistory.article_indices);
+        articleCount = lastHistory.article_count || 0;
+        // 기사 인덱스가 참조하는 수집 시간 저장
+        articleCollectedAt = lastHistory.collected_at instanceof Date
+          ? toMySQLDatetime(lastHistory.collected_at.toISOString())
+          : toMySQLDatetime(lastHistory.collected_at);
+      }
+
+      // 3. Insert inactive snapshot (마지막 기사 데이터 포함)
+      // cluster_score도 유지하여 이슈 지수 계산에 반영될 수 있도록 함
+      const clusterScore = calculateClusterScore(cluster.appearance_count);
+      
       const inactiveSnapshotSql = `
         INSERT INTO cluster_snapshots 
-        (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, status, cluster_score)
-        VALUES (?, ?, ?, ?, ?, 0, '[]', 'inactive', 0)
+        (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, article_collected_at, status, cluster_score)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'inactive', ?)
       `;
       await connection.execute(inactiveSnapshotSql, [
         toMySQLDatetime(collectedAt),
         cluster.cluster_id,
         cluster.topic_name,
         typeof cluster.tags === 'string' ? cluster.tags : JSON.stringify(cluster.tags),
-        cluster.appearance_count
+        cluster.appearance_count,
+        articleCount,
+        articleIndices,
+        articleCollectedAt, // 비활성 클러스터의 기사가 참조하는 시점
+        clusterScore
       ]);
 
-      console.log(`   ⛔ Deactivated cluster: ${cluster.cluster_id}`);
+      console.log(`   ⛔ Deactivated cluster: ${cluster.cluster_id} (kept ${articleCount} articles from ${articleCollectedAt || 'N/A'})`);
     }
   }
 }
@@ -276,32 +323,71 @@ async function deactivateMissingClusters(
 /**
  * Cluster_Snapshots에 현재 상태 기록
  * - 활성 클러스터만 저장
+ * - article_collected_at에 기사의 실제 수집 시간 저장 (news_articles.collected_at)
+ * 
+ * @param articlesCollectedAt 기사가 실제로 수집된 시간 (news_articles.collected_at)
  */
 async function saveClusterSnapshots(
   connection: PoolConnection,
   gptClusters: GPTClusterOutput[],
-  collectedAt: string
+  collectedAt: string,
+  articlesCollectedAt: string
 ): Promise<void> {
   const sql = `
     INSERT INTO cluster_snapshots 
-    (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, status, cluster_score)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+    (collected_at, cluster_id, topic_name, tags, appearance_count, article_count, article_indices, article_collected_at, status, cluster_score)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)
   `;
+
+  const mysqlDatetime = toMySQLDatetime(collectedAt);
+  const mysqlArticlesCollectedAt = toMySQLDatetime(articlesCollectedAt);
 
   for (const cluster of gptClusters) {
     await connection.execute(sql, [
-      toMySQLDatetime(collectedAt),
+      mysqlDatetime,
       cluster.cluster_id,
       cluster.topic_name,
       JSON.stringify(cluster.tags),
       cluster.appearance_count,
       cluster.article_count,
       JSON.stringify(cluster.article_indices),
+      mysqlArticlesCollectedAt, // 기사의 실제 수집 시간
       calculateClusterScore(cluster.appearance_count)
     ]);
   }
 
-  console.log(`   📸 Saved ${gptClusters.length} cluster snapshots`);
+  console.log(`   📸 Saved ${gptClusters.length} cluster snapshots (articles from ${articlesCollectedAt})`);
+}
+
+// ============ 스키마 마이그레이션 ============
+
+/**
+ * cluster_snapshots 테이블에 article_collected_at 컬럼이 있는지 확인하고 없으면 추가
+ */
+async function ensureArticleCollectedAtColumn(connection: PoolConnection): Promise<void> {
+  try {
+    // 컬럼 존재 여부 확인
+    const [columns] = await connection.execute<any>(
+      `SELECT COLUMN_NAME 
+       FROM INFORMATION_SCHEMA.COLUMNS 
+       WHERE TABLE_SCHEMA = DATABASE() 
+         AND TABLE_NAME = 'cluster_snapshots' 
+         AND COLUMN_NAME = 'article_collected_at'`
+    );
+
+    if (columns.length === 0) {
+      console.log("📦 Adding article_collected_at column to cluster_snapshots...");
+      await connection.execute(
+        `ALTER TABLE cluster_snapshots 
+         ADD COLUMN article_collected_at DATETIME COMMENT '기사 인덱스가 참조하는 수집 시간' 
+         AFTER article_indices`
+      );
+      console.log("   ✅ Column added successfully");
+    }
+  } catch (error) {
+    console.error("⚠️ Error checking/adding article_collected_at column:", error);
+    // 에러가 발생해도 계속 진행 (컬럼이 이미 있을 수 있음)
+  }
 }
 
 // ============ 메인 저장 함수 ============
@@ -321,11 +407,18 @@ async function saveClassificationResultToDB(
   console.log("\n========== Saving Classification Results to DB (MySQL) ==========\n");
 
   const collectedAt = classificationResult.processed_at;
+  const articlesCollectedAt = classificationResult.articles_collected_at; // 기사의 실제 수집 시간
+  console.log(`📝 Pipeline collected_at: ${collectedAt}`);
+  console.log(`📰 Articles collected_at: ${articlesCollectedAt}\n`);
+  
   const pool = getDatabasePool();
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
+
+    // Step 0: article_collected_at 컬럼 확인 및 추가 (마이그레이션)
+    await ensureArticleCollectedAtColumn(connection);
 
     // Step 1: 기존 클러스터 조회 (for logic check)
     console.log("📚 Fetching existing clusters...");
@@ -346,10 +439,10 @@ async function saveClassificationResultToDB(
 
       if (existingCluster) {
         // 업데이트
-        await updateExistingCluster(connection, existingCluster, gptCluster, collectedAt);
+        await updateExistingCluster(connection, existingCluster, gptCluster, collectedAt, articlesCollectedAt);
       } else {
         // 생성
-        await createNewCluster(connection, gptCluster, collectedAt);
+        await createNewCluster(connection, gptCluster, collectedAt, articlesCollectedAt);
       }
     }
     console.log("");
@@ -361,7 +454,7 @@ async function saveClassificationResultToDB(
 
     // Step 4: Snapshots 저장 (활성 클러스터)
     console.log("📸 Saving cluster snapshots...");
-    await saveClusterSnapshots(connection, classificationResult.clusters, collectedAt);
+    await saveClusterSnapshots(connection, classificationResult.clusters, collectedAt, articlesCollectedAt);
     console.log("");
 
     await connection.commit();
@@ -410,6 +503,9 @@ async function getClusterSnapshots(collectedAt: string): Promise<ClusterSnapshot
     appearance_count: row.appearance_count,
     article_count: row.article_count,
     article_indices: typeof row.article_indices === 'string' ? JSON.parse(row.article_indices) : row.article_indices,
+    article_collected_at: row.article_collected_at 
+      ? (row.article_collected_at instanceof Date ? row.article_collected_at.toISOString() : row.article_collected_at)
+      : null,
     status: row.status,
     cluster_score: row.cluster_score
   }));

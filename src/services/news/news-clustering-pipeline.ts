@@ -42,7 +42,7 @@ interface PipelineConfig {
 
 const DEFAULT_CONFIG: PipelineConfig = {
   retryDelayMs: 5000, // 5초
-  maxRetries: 2,
+  maxRetries: 1,
   enableSchedule: true,
   scheduleTime: "0 * * * *", // 매 시간 정각
 };
@@ -100,7 +100,12 @@ async function executePipelineWithRetry(
   console.log("\n" + "=".repeat(70));
   console.log("🚀 News Clustering Pipeline Started (MySQL)");
   console.log("=".repeat(70));
-  console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  
+  // ⚠️ 중요: 파이프라인 전체에서 동일한 collected_at 시간을 사용
+  // cluster_snapshots와 issue_index 테이블 간의 시간 일관성 보장
+  const pipelineCollectedAt = new Date().toISOString();
+  
+  console.log(`⏰ Timestamp (collected_at): ${pipelineCollectedAt}`);
   console.log(`🔄 Attempt: ${retryCount + 1}/${maxRetries + 1}\n`);
 
   const startTime = Date.now();
@@ -116,6 +121,11 @@ async function executePipelineWithRetry(
     console.log("🤖 [Step 2/5] GPT Classification...\n");
 
     const classificationResult = await classifyNewsWithGPT(gptInput);
+    
+    // ⚠️ 중요: GPT 분류 결과의 processed_at을 파이프라인 시작 시간으로 덮어쓰기
+    // 이렇게 해야 cluster_snapshots와 issue_index가 동일한 collected_at을 가짐
+    classificationResult.processed_at = pipelineCollectedAt;
+    
     console.log(`✅ Classification complete\n`);
 
     // ========== Step 3: DB 저장 ==========
@@ -134,13 +144,14 @@ async function executePipelineWithRetry(
     const issueIndexInput: IssueIndexInput = {
       active_clusters: activeClusters.map(mapToClusterSnapshot),
       inactive_clusters_within_30days: inactiveClusters.map(mapToClusterSnapshot),
-      calculated_at: new Date().toISOString(),
+      calculated_at: pipelineCollectedAt, // 동일한 시간 사용
     };
 
     const issueIndexOutput = calculateIssueIndex(issueIndexInput);
 
+    // ⚠️ 중요: issue_index 저장 시에도 동일한 pipelineCollectedAt 사용
     await saveIssueIndexToMySQL({
-      collected_at: issueIndexOutput.collected_at,
+      collected_at: pipelineCollectedAt, // issueIndexOutput.collected_at 대신 직접 사용
       overall_index: issueIndexOutput.overall_index,
       active_clusters_count: issueIndexOutput.active_count,
       inactive_clusters_count: issueIndexOutput.inactive_count,

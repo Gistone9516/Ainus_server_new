@@ -26,7 +26,10 @@ export class ModelService {
     isActive: boolean = true
   ): Promise<PaginatedResponse<AiModel>> {
     try {
-      const offset = (page - 1) * limit;
+      // MySQL prepared statement에서 모든 파라미터를 명시적으로 숫자로 변환
+      const limitNum = Number(limit);
+      const offsetNum = (Number(page) - 1) * limitNum;
+      const isActiveNum = isActive ? 1 : 0;
 
       // 전체 개수 조회
       const countSql = `
@@ -34,10 +37,11 @@ export class ModelService {
         FROM ai_models
         WHERE is_active = ?
       `;
-      const countResult = await executeQuery<{ total: number }>(countSql, [isActive]);
+      const countResult = await executeQuery<{ total: number }>(countSql, [isActiveNum]);
       const total = countResult[0]?.total || 0;
 
       // 모델 목록 조회 (JOIN으로 creator_name, creator_slug 포함 - 타입에는 없지만 런타임에는 존재)
+      // MySQL2 prepared statement에서 LIMIT/OFFSET은 직접 삽입 (정수로 검증됨)
       const sql = `
         SELECT
           am.*,
@@ -47,17 +51,17 @@ export class ModelService {
         INNER JOIN model_creators mc ON am.creator_id = mc.creator_id
         WHERE am.is_active = ?
         ORDER BY am.created_at DESC
-        LIMIT ? OFFSET ?
+        LIMIT ${limitNum} OFFSET ${offsetNum}
       `;
-      const models = await executeQuery<AiModel & { creator_name?: string; creator_slug?: string }>(sql, [isActive, limit, offset]);
+      const models = await executeQuery<AiModel & { creator_name?: string; creator_slug?: string }>(sql, [isActiveNum]);
 
-      const totalPages = Math.ceil(total / limit);
+      const totalPages = Math.ceil(total / limitNum);
 
       return {
         items: models,
         total,
-        page,
-        limit,
+        page: Number(page),
+        limit: limitNum,
         totalPages,
         hasMore: page < totalPages,
       };

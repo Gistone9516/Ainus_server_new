@@ -43,6 +43,7 @@ export async function runMigrations(): Promise<void> {
     await createClustersTable();
     await createClusterHistoryTable();
     await createClusterSnapshotsTable();
+    await addArticleCollectedAtColumn(); // 비활성 클러스터 기사 참조용 컬럼
     await createIssueIndexTable();
     await createJobIssueIndexTable();
     await createJobClusterMappingTable();
@@ -431,6 +432,7 @@ async function createClusterSnapshotsTable(): Promise<void> {
       appearance_count INT NOT NULL COMMENT '재출현 횟수',
       article_count INT NOT NULL COMMENT '해당 시간 기사 개수',
       article_indices JSON NOT NULL COMMENT '기사 인덱스 배열 (0-999)',
+      article_collected_at DATETIME COMMENT '기사 인덱스가 참조하는 수집 시간',
       status ENUM('active', 'inactive') NOT NULL COMMENT '상태',
       cluster_score DECIMAL(5,2) NOT NULL COMMENT '클러스터 점수 (0-100)',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '생성일시',
@@ -442,6 +444,27 @@ async function createClusterSnapshotsTable(): Promise<void> {
   `;
   await executeQuery(sql);
   logger.info('Table "cluster_snapshots" created');
+}
+
+/**
+ * cluster_snapshots 테이블에 article_collected_at 컬럼 추가
+ * 비활성 클러스터의 기사가 어느 시점의 데이터인지 저장
+ */
+async function addArticleCollectedAtColumn(): Promise<void> {
+  try {
+    const sql = `
+      ALTER TABLE cluster_snapshots
+      ADD COLUMN article_collected_at DATETIME COMMENT '기사 인덱스가 참조하는 수집 시간' AFTER article_indices
+    `;
+    await executeQuery(sql);
+    logger.info('Column "article_collected_at" added to cluster_snapshots');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Column "article_collected_at" already exists');
+    } else {
+      throw error;
+    }
+  }
 }
 
 
@@ -816,100 +839,162 @@ async function migrateCommunityTables(): Promise<void> {
  * community_posts 테이블에 카테고리 및 소프트 삭제 컬럼 추가
  */
 async function alterCommunityPostsTable(): Promise<void> {
+  // 카테고리 컬럼 추가
   try {
-    // 카테고리 컬럼 추가
     const addCategorySql = `
       ALTER TABLE community_posts
-      ADD COLUMN IF NOT EXISTS category ENUM(
+      ADD COLUMN category ENUM(
         'prompt_share',
         'qa',
         'review',
         'general',
         'announcement'
-      ) NOT NULL DEFAULT 'general' AFTER content;
+      ) NOT NULL DEFAULT 'general' AFTER content
     `;
     await executeQuery(addCategorySql);
-
-    // 소프트 삭제 컬럼 추가
-    const addDeletedSql = `
-      ALTER TABLE community_posts
-      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER views_count,
-      ADD COLUMN IF NOT EXISTS deleted_at DATETIME AFTER is_deleted;
-    `;
-    await executeQuery(addDeletedSql);
-
-    // FULLTEXT INDEX 추가 (이미 존재하면 무시)
-    try {
-      const addFulltextSql = `
-        ALTER TABLE community_posts
-        ADD FULLTEXT INDEX idx_fulltext_search (title, content);
-      `;
-      await executeQuery(addFulltextSql);
-    } catch (error: any) {
-      if (!error.message.includes('Duplicate key name')) {
-        throw error;
-      }
-    }
-
-    logger.info('Table "community_posts" altered successfully');
+    logger.info('Column "category" added to community_posts');
   } catch (error: any) {
     if (error.message.includes('Duplicate column name')) {
-      logger.info('Table "community_posts" already migrated');
+      logger.info('Column "category" already exists in community_posts');
     } else {
       throw error;
     }
   }
+
+  // is_deleted 컬럼 추가
+  try {
+    const addIsDeletedSql = `
+      ALTER TABLE community_posts
+      ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE AFTER views_count
+    `;
+    await executeQuery(addIsDeletedSql);
+    logger.info('Column "is_deleted" added to community_posts');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Column "is_deleted" already exists in community_posts');
+    } else {
+      throw error;
+    }
+  }
+
+  // deleted_at 컬럼 추가
+  try {
+    const addDeletedAtSql = `
+      ALTER TABLE community_posts
+      ADD COLUMN deleted_at DATETIME AFTER is_deleted
+    `;
+    await executeQuery(addDeletedAtSql);
+    logger.info('Column "deleted_at" added to community_posts');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Column "deleted_at" already exists in community_posts');
+    } else {
+      throw error;
+    }
+  }
+
+  // FULLTEXT INDEX 추가 (이미 존재하면 무시)
+  try {
+    const addFulltextSql = `
+      ALTER TABLE community_posts
+      ADD FULLTEXT INDEX idx_fulltext_search (title, content)
+    `;
+    await executeQuery(addFulltextSql);
+    logger.info('FULLTEXT INDEX added to community_posts');
+  } catch (error: any) {
+    if (!error.message.includes('Duplicate key name')) {
+      throw error;
+    }
+    logger.info('FULLTEXT INDEX already exists in community_posts');
+  }
+
+  logger.info('Table "community_posts" migration completed');
 }
 
 /**
  * community_comments 테이블에 대댓글 및 소프트 삭제 컬럼 추가
  */
 async function alterCommunityCommentsTable(): Promise<void> {
+  // parent_comment_id 컬럼 추가
   try {
-    // parent_comment_id 및 소프트 삭제 컬럼 추가
-    const addColumnsSql = `
+    const addParentSql = `
       ALTER TABLE community_comments
-      ADD COLUMN IF NOT EXISTS parent_comment_id INT AFTER post_id,
-      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE AFTER likes_count,
-      ADD COLUMN IF NOT EXISTS deleted_at DATETIME AFTER is_deleted;
+      ADD COLUMN parent_comment_id INT AFTER post_id
     `;
-    await executeQuery(addColumnsSql);
-
-    // 외래키 추가 (이미 존재하면 무시)
-    try {
-      const addFkSql = `
-        ALTER TABLE community_comments
-        ADD CONSTRAINT fk_parent_comment
-        FOREIGN KEY (parent_comment_id) REFERENCES community_comments(comment_id) ON DELETE CASCADE;
-      `;
-      await executeQuery(addFkSql);
-    } catch (error: any) {
-      if (!error.message.includes('Duplicate foreign key')) {
-        // FK 에러는 무시
-      }
-    }
-
-    // 인덱스 추가 (이미 존재하면 무시)
-    try {
-      const addIndexSql = `
-        ALTER TABLE community_comments
-        ADD INDEX idx_parent_comment_id (parent_comment_id);
-      `;
-      await executeQuery(addIndexSql);
-    } catch (error: any) {
-      if (!error.message.includes('Duplicate key name')) {
-        throw error;
-      }
-    }
-
-    logger.info('Table "community_comments" altered successfully');
+    await executeQuery(addParentSql);
+    logger.info('Column "parent_comment_id" added to community_comments');
   } catch (error: any) {
     if (error.message.includes('Duplicate column name')) {
-      logger.info('Table "community_comments" already migrated');
+      logger.info('Column "parent_comment_id" already exists in community_comments');
     } else {
       throw error;
     }
   }
+
+  // is_deleted 컬럼 추가
+  try {
+    const addIsDeletedSql = `
+      ALTER TABLE community_comments
+      ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE AFTER likes_count
+    `;
+    await executeQuery(addIsDeletedSql);
+    logger.info('Column "is_deleted" added to community_comments');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Column "is_deleted" already exists in community_comments');
+    } else {
+      throw error;
+    }
+  }
+
+  // deleted_at 컬럼 추가
+  try {
+    const addDeletedAtSql = `
+      ALTER TABLE community_comments
+      ADD COLUMN deleted_at DATETIME AFTER is_deleted
+    `;
+    await executeQuery(addDeletedAtSql);
+    logger.info('Column "deleted_at" added to community_comments');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate column name')) {
+      logger.info('Column "deleted_at" already exists in community_comments');
+    } else {
+      throw error;
+    }
+  }
+
+  // 외래키 추가 (이미 존재하면 무시)
+  try {
+    const addFkSql = `
+      ALTER TABLE community_comments
+      ADD CONSTRAINT fk_parent_comment
+      FOREIGN KEY (parent_comment_id) REFERENCES community_comments(comment_id) ON DELETE CASCADE
+    `;
+    await executeQuery(addFkSql);
+    logger.info('Foreign key "fk_parent_comment" added to community_comments');
+  } catch (error: any) {
+    if (error.message.includes('Duplicate') || error.message.includes('already exists')) {
+      logger.info('Foreign key "fk_parent_comment" already exists in community_comments');
+    }
+    // FK 에러는 무시 (이미 존재하는 경우)
+  }
+
+  // 인덱스 추가 (이미 존재하면 무시)
+  try {
+    const addIndexSql = `
+      ALTER TABLE community_comments
+      ADD INDEX idx_parent_comment_id (parent_comment_id)
+    `;
+    await executeQuery(addIndexSql);
+    logger.info('Index "idx_parent_comment_id" added to community_comments');
+  } catch (error: any) {
+    if (!error.message.includes('Duplicate key name')) {
+      throw error;
+    }
+    logger.info('Index "idx_parent_comment_id" already exists in community_comments');
+  }
+
+  logger.info('Table "community_comments" migration completed');
 }
 
 /**

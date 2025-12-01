@@ -36,7 +36,10 @@ class DatabasePool {
         database: config.database.name,
         waitForConnections: config.database.waitForConnections,
         connectionLimit: config.database.connectionLimit,
-        queueLimit: config.database.queueLimit
+        queueLimit: config.database.queueLimit,
+        // ⚠️ 중요: UTC 시간대로 일관되게 처리
+        // MySQL의 DATETIME 값을 JavaScript Date로 변환할 때 UTC로 해석
+        timezone: '+00:00'
       });
 
       // 연결 테스트
@@ -108,6 +111,7 @@ export function getDatabasePool(): DatabasePool {
 
 /**
  * 편의 함수: 쿼리 실행
+ * Note: query() 메서드 사용 (execute()의 prepared statement는 LIMIT/OFFSET 파라미터 처리 문제 있음)
  */
 export async function executeQuery<T>(
   query: string,
@@ -120,7 +124,8 @@ export async function executeQuery<T>(
 
   try {
     connection = await pool.getConnection();
-    const [rows] = await connection.execute(query, values);
+    // query() 사용 - execute()의 prepared statement 호환성 문제 해결
+    const [rows] = await connection.query(query, values);
     return rows as T[];
   } catch (error) {
     throw new DatabaseException(

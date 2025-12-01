@@ -19,7 +19,10 @@ export class CreatorService {
     isActive: boolean = true
   ): Promise<PaginatedResponse<ModelCreator>> {
     try {
-      const offset = (page - 1) * limit;
+      // MySQL prepared statement에서 모든 파라미터를 명시적으로 숫자로 변환
+      const limitNum = Number(limit);
+      const offsetNum = (Number(page) - 1) * limitNum;
+      const isActiveNum = isActive ? 1 : 0;
 
       // 전체 개수 조회
       const countSql = `
@@ -27,26 +30,27 @@ export class CreatorService {
         FROM model_creators
         WHERE is_active = ?
       `;
-      const countResult = await executeQuery<{ total: number }>(countSql, [isActive]);
+      const countResult = await executeQuery<{ total: number }>(countSql, [isActiveNum]);
       const total = countResult[0]?.total || 0;
 
       // 제공사 목록 조회
+      // MySQL2 prepared statement에서 LIMIT/OFFSET은 직접 삽입 (정수로 검증됨)
       const sql = `
         SELECT *
         FROM model_creators
         WHERE is_active = ?
         ORDER BY creator_name ASC
-        LIMIT ? OFFSET ?
+        LIMIT ${limitNum} OFFSET ${offsetNum}
       `;
-      const creators = await executeQuery<ModelCreator>(sql, [isActive, limit, offset]);
+      const creators = await executeQuery<ModelCreator>(sql, [isActiveNum]);
 
-      const totalPages = Math.ceil(total / limit);
+      const totalPages = Math.ceil(total / limitNum);
 
       return {
         items: creators,
         total,
-        page,
-        limit,
+        page: Number(page),
+        limit: limitNum,
         totalPages,
         hasMore: page < totalPages,
       };
@@ -103,34 +107,37 @@ export class CreatorService {
     limit: number = 10
   ): Promise<PaginatedResponse<AiModel>> {
     try {
-      const offset = (page - 1) * limit;
+      // MySQL prepared statement에서 모든 파라미터를 명시적으로 숫자로 변환
+      const limitNum = Number(limit);
+      const offsetNum = (Number(page) - 1) * limitNum;
 
       // 전체 개수 조회
       const countSql = `
         SELECT COUNT(*) as total
         FROM ai_models
-        WHERE creator_id = ? AND is_active = TRUE
+        WHERE creator_id = ? AND is_active = 1
       `;
       const countResult = await executeQuery<{ total: number }>(countSql, [creatorId]);
       const total = countResult[0]?.total || 0;
 
       // 모델 목록 조회
+      // MySQL2 prepared statement에서 LIMIT/OFFSET은 직접 삽입 (정수로 검증됨)
       const sql = `
         SELECT *
         FROM ai_models
-        WHERE creator_id = ? AND is_active = TRUE
+        WHERE creator_id = ? AND is_active = 1
         ORDER BY release_date DESC
-        LIMIT ? OFFSET ?
+        LIMIT ${limitNum} OFFSET ${offsetNum}
       `;
-      const models = await executeQuery<AiModel>(sql, [creatorId, limit, offset]);
+      const models = await executeQuery<AiModel>(sql, [creatorId]);
 
-      const totalPages = Math.ceil(total / limit);
+      const totalPages = Math.ceil(total / limitNum);
 
       return {
         items: models,
         total,
-        page,
-        limit,
+        page: Number(page),
+        limit: limitNum,
         totalPages,
         hasMore: page < totalPages,
       };
