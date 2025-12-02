@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mysql:*)",
+      "Bash(npm run migrate:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout 5 bash -c 'while ! timeout 1 bash -c \"\"</dev/tcp/localhost/3000\"\" 2>/dev/null; do sleep 0.5; done; echo \"\"Server is ready\"\"')",
+      "Bash(curl:*)",
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "Bash(npm run build:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(npm start)",
+      "Bash(timeout:*)",
+      "Bash(taskkill:*)",
+      "Bash(node check-job-data.js:*)",
+      "Bash(node check-clusters.js:*)",
+      "Bash(node test-tag-matching.js:*)",
+      "Bash(del check-job-data.js check-clusters.js test-tag-matching.js)",
+      "Bash(node debug-datetime.js:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

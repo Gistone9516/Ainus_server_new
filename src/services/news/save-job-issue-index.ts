@@ -79,7 +79,10 @@ async function calculateTotalArticlesCount(
   const allIndices = new Set<number>();
 
   for (const row of rows) {
-    const indices: number[] = JSON.parse(row.article_indices);
+    // article_indices가 이미 파싱된 배열이면 그대로 사용, 문자열이면 파싱
+    const indices: number[] = typeof row.article_indices === 'string'
+      ? JSON.parse(row.article_indices)
+      : row.article_indices;
     indices.forEach((index) => allIndices.add(index));
   }
 

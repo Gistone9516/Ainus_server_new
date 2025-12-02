@@ -95,24 +95,15 @@ export async function register(request: RegisterRequest): Promise<RegisterResult
       );
     }
 
-    // 약관 동의 검증 (필수)
-    if (request.terms_agreed !== true) {
-      throw new ValidationException(
-        '이용약관에 동의해주세요 (ERROR_1006)',
-        methodName
-      );
-    }
-    if (request.privacy_agreed !== true) {
-      throw new ValidationException(
-        '개인정보 처리방침에 동의해주세요 (ERROR_1006)',
-        methodName
-      );
-    }
+    // 프로토타입 모드: 약관 동의 자동 설정
+    // 약관 동의가 명시되지 않으면 자동으로 true로 설정
+    request.terms_agreed = request.terms_agreed ?? true;
+    request.privacy_agreed = request.privacy_agreed ?? true;
 
-    // 비밀번호 강도 검증
-    if (!isStrongPassword(request.password)) {
+    // 프로토타입 모드: 비밀번호 강도 검증 완화 (4자 이상만 체크)
+    if (!request.password || request.password.length < 4) {
       throw new ValidationException(
-        '비밀번호는 최소 8자 이상이며 대문자, 소문자, 숫자, 특수문자를 포함해야 합니다 (ERROR_1003)',
+        '비밀번호는 최소 4자 이상이어야 합니다 (ERROR_1003)',
         methodName
       );
     }

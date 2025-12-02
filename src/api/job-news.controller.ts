@@ -16,6 +16,26 @@ import { RowDataPacket } from 'mysql2/promise';
 
 const logger = new Logger('JobNewsController');
 
+// ============ 유틸리티 함수 ============
+
+/**
+ * MySQL Date 객체를 올바른 UTC ISO 문자열로 변환
+ * MySQL timezone: '+00:00' 설정으로 인해 Date 객체가 잘못 생성되는 문제 보정
+ *
+ * @param mysqlDate MySQL에서 반환된 Date 객체
+ * @returns 올바른 UTC ISO 문자열
+ */
+function correctMySQLDateToUTC(mysqlDate: Date): string {
+  if (!(mysqlDate instanceof Date)) {
+    return mysqlDate; // 이미 문자열이면 그대로 반환
+  }
+
+  // MySQL에서 로컬 시간으로 저장된 값이 UTC로 잘못 해석됨
+  // 한국 시간(+09:00)을 빼서 실제 UTC 시간으로 보정
+  const correctedTime = new Date(mysqlDate.getTime() - (9 * 60 * 60 * 1000));
+  return correctedTime.toISOString();
+}
+
 // ============ 1. 특정 직업 이슈 지수 조회 ============
 
 /**
@@ -89,7 +109,7 @@ export async function getJobIssueIndex(req: Request, res: Response): Promise<voi
 
     res.json({
       job_category: data.job_category,
-      collected_at: data.collected_at,
+      collected_at: correctMySQLDateToUTC(data.collected_at),
       issue_index: parseFloat(data.issue_index),
       active_clusters_count: data.active_clusters_count,
       inactive_clusters_count: data.inactive_clusters_count,
@@ -165,7 +185,7 @@ export async function getAllJobIssueIndexes(req: Request, res: Response): Promis
     const collectedAtValue = rows[0].collected_at;
 
     res.json({
-      collected_at: collectedAtValue,
+      collected_at: correctMySQLDateToUTC(collectedAtValue),
       jobs: rows.map((row) => ({
         job_category: row.job_category,
         issue_index: parseFloat(row.issue_index),
@@ -284,7 +304,7 @@ export async function getJobMatchedClusters(req: Request, res: Response): Promis
 
     res.json({
       job_category: category,
-      collected_at: targetCollectedAt,
+      collected_at: correctMySQLDateToUTC(new Date(targetCollectedAt)),
       clusters,
       metadata: {
         total_clusters: clusters.length,
@@ -416,7 +436,7 @@ export async function getJobMatchedArticles(req: Request, res: Response): Promis
     if (limitedIndices.length === 0) {
       res.json({
         job_category: category,
-        collected_at: targetCollectedAt,
+        collected_at: correctMySQLDateToUTC(new Date(targetCollectedAt)),
         article_count: 0,
         articles: [],
       });
@@ -455,7 +475,7 @@ export async function getJobMatchedArticles(req: Request, res: Response): Promis
 
     res.json({
       job_category: category,
-      collected_at: targetCollectedAt,
+      collected_at: correctMySQLDateToUTC(new Date(targetCollectedAt)),
       article_count: articles.length,
       total_matched_articles: uniqueIndices.length,
       articles,
