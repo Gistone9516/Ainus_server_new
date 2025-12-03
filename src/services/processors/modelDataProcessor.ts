@@ -81,22 +81,44 @@ export class ModelDataProcessor {
 
   /**
    * 단일 모델 처리
+   * 각 단계가 순차적으로 성공해야 다음 단계로 진행
    */
   private async processModel(model: ArtificialAnalysisModel): Promise<void> {
-    // 1. 제공사 저장
-    await this.saveCreator(model);
+    // 1. 제공사 저장 (필수 - 실패 시 모델 저장 불가)
+    try {
+      await this.saveCreator(model);
+    } catch (error) {
+      throw new Error(`제공사 저장 실패 (${model.model_creator.name}): ${error}`);
+    }
 
-    // 2. 모델 기본 정보 저장
-    await this.saveModelInfo(model);
+    // 2. 모델 기본 정보 저장 (필수 - 실패 시 후속 작업 불가)
+    try {
+      await this.saveModelInfo(model);
+    } catch (error) {
+      throw new Error(`모델 저장 실패 (${model.name}): ${error}`);
+    }
 
-    // 3. 벤치마크 점수 저장
-    await this.saveEvaluations(model);
+    // 3. 벤치마크 점수 저장 (모델이 존재해야 함)
+    try {
+      await this.saveEvaluations(model);
+    } catch (error) {
+      console.warn(`  벤치마크 저장 실패 (${model.name}):`, error);
+      // 벤치마크 실패는 치명적이지 않으므로 계속 진행
+    }
 
     // 4. 가격 정보 저장
-    await this.savePricing(model);
+    try {
+      await this.savePricing(model);
+    } catch (error) {
+      console.warn(`  가격 저장 실패 (${model.name}):`, error);
+    }
 
     // 5. 성능 지표 저장
-    await this.savePerformance(model);
+    try {
+      await this.savePerformance(model);
+    } catch (error) {
+      console.warn(`  성능 저장 실패 (${model.name}):`, error);
+    }
   }
 
   /**

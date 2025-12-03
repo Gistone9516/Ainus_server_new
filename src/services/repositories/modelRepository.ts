@@ -81,11 +81,21 @@ export class ModelRepository {
         updated_at = CURRENT_TIMESTAMP
     `;
 
-    await this.connection!.execute(query, [
-      creator.creator_id,
-      creator.creator_name,
-      creator.creator_slug,
-    ]);
+    try {
+      await this.connection!.execute(query, [
+        creator.creator_id,
+        creator.creator_name,
+        creator.creator_slug,
+      ]);
+    } catch (error: any) {
+      console.error(`[ModelRepository] Creator 저장 실패:`, {
+        creator_id: creator.creator_id,
+        creator_name: creator.creator_name,
+        error: error.message,
+        sqlState: error.sqlState,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -105,14 +115,26 @@ export class ModelRepository {
         updated_at = CURRENT_TIMESTAMP
     `;
 
-    await this.connection!.execute(query, [
-      model.model_id,
-      model.model_name,
-      model.model_slug,
-      model.creator_id,
-      model.release_date,
-      JSON.stringify(model.raw_data),
-    ]);
+    try {
+      await this.connection!.execute(query, [
+        model.model_id,
+        model.model_name,
+        model.model_slug,
+        model.creator_id,
+        model.release_date,
+        JSON.stringify(model.raw_data),
+      ]);
+    } catch (error: any) {
+      console.error(`[ModelRepository] Model 저장 실패:`, {
+        model_id: model.model_id,
+        model_name: model.model_name,
+        creator_id: model.creator_id,
+        error: error.message,
+        sqlState: error.sqlState,
+        errno: error.errno,
+      });
+      throw error;
+    }
   }
 
   /**

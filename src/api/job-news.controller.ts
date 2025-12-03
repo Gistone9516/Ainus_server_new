@@ -36,6 +36,15 @@ function correctMySQLDateToUTC(mysqlDate: Date): string {
   return correctedTime.toISOString();
 }
 
+/**
+ * ISO 8601 문자열을 MySQL DATETIME 형식으로 변환
+ * '2025-01-15T08:00:46.000Z' → '2025-01-15 08:00:46'
+ */
+function toMySQLDatetime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
 // ============ 1. 특정 직업 이슈 지수 조회 ============
 
 /**
@@ -62,7 +71,8 @@ export async function getJobIssueIndex(req: Request, res: Response): Promise<voi
     let params: any[];
 
     if (collectedAt) {
-      // 특정 시간 조회
+      // 특정 시간 조회 - ISO 8601을 MySQL DATETIME으로 변환
+      const mysqlDatetime = toMySQLDatetime(collectedAt);
       query = `
         SELECT
           job_category,
@@ -75,7 +85,7 @@ export async function getJobIssueIndex(req: Request, res: Response): Promise<voi
         FROM job_issue_index
         WHERE job_category = ? AND collected_at = ?
       `;
-      params = [category, collectedAt];
+      params = [category, mysqlDatetime];
     } else {
       // 최신 조회
       query = `
@@ -139,7 +149,8 @@ export async function getAllJobIssueIndexes(req: Request, res: Response): Promis
     let params: any[];
 
     if (collectedAt) {
-      // 특정 시간의 전체 직업 조회
+      // 특정 시간의 전체 직업 조회 - ISO 8601을 MySQL DATETIME으로 변환
+      const mysqlDatetime = toMySQLDatetime(collectedAt);
       query = `
         SELECT
           job_category,
@@ -152,7 +163,7 @@ export async function getAllJobIssueIndexes(req: Request, res: Response): Promis
         WHERE collected_at = ?
         ORDER BY issue_index DESC
       `;
-      params = [collectedAt];
+      params = [mysqlDatetime];
     } else {
       // 최신 시간의 전체 직업 조회
       query = `
@@ -231,7 +242,8 @@ export async function getJobMatchedClusters(req: Request, res: Response): Promis
     let targetCollectedAt: string;
 
     if (collectedAt) {
-      targetCollectedAt = collectedAt;
+      // ISO 8601을 MySQL DATETIME으로 변환
+      targetCollectedAt = toMySQLDatetime(collectedAt);
     } else {
       const latestQuery = `
         SELECT MAX(collected_at) as latest
@@ -350,7 +362,8 @@ export async function getJobMatchedArticles(req: Request, res: Response): Promis
     let targetCollectedAt: string;
 
     if (collectedAt) {
-      targetCollectedAt = collectedAt;
+      // ISO 8601을 MySQL DATETIME으로 변환
+      targetCollectedAt = toMySQLDatetime(collectedAt);
     } else {
       const latestQuery = `
         SELECT MAX(collected_at) as latest

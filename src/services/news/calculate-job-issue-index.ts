@@ -81,6 +81,15 @@ function applyExponentialDecay(baseScore: number, daysPassed: number): number {
 }
 
 /**
+ * ISO 8601 문자열을 MySQL DATETIME 형식으로 변환
+ * '2025-01-15T08:00:46.000Z' → '2025-01-15 08:00:46'
+ */
+function toMySQLDatetime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+/**
  * 문자열 또는 JSON 배열을 파싱하여 배열로 반환
  * - 이미 배열인 경우: 그대로 반환
  * - JSON 배열 문자열인 경우: JSON.parse로 파싱
@@ -119,6 +128,9 @@ function parseArrayField(value: any): any[] {
 async function getLatestClusterSnapshots(
   collectedAt: string
 ): Promise<ClusterSnapshot[]> {
+  // ISO 8601을 MySQL DATETIME으로 변환
+  const mysqlDatetime = toMySQLDatetime(collectedAt);
+  
   const query = `
     SELECT
       cluster_id,
@@ -135,7 +147,7 @@ async function getLatestClusterSnapshots(
     ORDER BY cluster_score DESC
   `;
 
-  const rows: any[] = await executeQuery(query, [collectedAt]);
+  const rows: any[] = await executeQuery(query, [mysqlDatetime]);
 
   return rows.map((row) => ({
     cluster_id: row.cluster_id,

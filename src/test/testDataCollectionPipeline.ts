@@ -129,8 +129,38 @@ async function testAAOnly() {
   }
 }
 
+// Valid modes for the test runner
+export const VALID_MODES = ["all", "schedule", "naver", "aa"] as const;
+export type TestMode = (typeof VALID_MODES)[number];
+
+/**
+ * Validates if the given mode is a valid test mode
+ */
+export function isValidMode(mode: string): mode is TestMode {
+  return VALID_MODES.includes(mode as TestMode);
+}
+
+/**
+ * Displays error message for invalid mode and exits with code 1
+ */
+export function handleInvalidMode(invalidMode: string): never {
+  console.error(`\n오류: '${invalidMode}'은(는) 유효하지 않은 모드입니다.`);
+  console.error("\n유효한 모드:");
+  console.error("  all      - 전체 테스트 (기본값)");
+  console.error("  schedule - 스케줄러 등록만");
+  console.error("  naver    - Naver 수집만");
+  console.error("  aa       - AA 수집만");
+  console.error("\n사용법:");
+  console.error("  npm run test:pipeline [mode]\n");
+  process.exit(1);
+}
+
 if (require.main === module) {
   const mode = process.argv[2] || "all";
+
+  if (!isValidMode(mode)) {
+    handleInvalidMode(mode);
+  }
 
   switch (mode) {
     case "all":
@@ -145,13 +175,5 @@ if (require.main === module) {
     case "aa":
       testAAOnly();
       break;
-    default:
-      console.log("\n사용법:");
-      console.log("  npm run test:pipeline [mode]");
-      console.log("\n모드:");
-      console.log("  all      - 전체 테스트 (기본값)");
-      console.log("  schedule - 스케줄러 등록만");
-      console.log("  naver    - Naver 수집만");
-      console.log("  aa       - AA 수집만\n");
   }
 }
