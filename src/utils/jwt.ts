@@ -13,8 +13,30 @@ import { AuthenticationException } from '../exceptions';
 const config = getConfig();
 
 /**
+ * 기간 문자열을 초 단위 숫자로 변환
+ * @param duration 기간 문자열 (예: '15m', '7d', '1h')
+ */
+export function parseDuration(duration: string): number {
+  const unit = duration.slice(-1);
+  const value = parseInt(duration.slice(0, -1), 10);
+  
+  if (isNaN(value)) {
+    // 숫자만 있는 경우 초 단위로 간주
+    const num = parseInt(duration, 10);
+    return isNaN(num) ? 15 * 60 : num;
+  }
+
+  switch (unit) {
+    case 's': return value;
+    case 'm': return value * 60;
+    case 'h': return value * 60 * 60;
+    case 'd': return value * 24 * 60 * 60;
+    default: return value;
+  }
+}
+
+/**
  * Access Token 생성 (TASK-1-13)
- * 유효 기간: 15분
  */
 export function generateAccessToken(
   user_id: number,
@@ -27,7 +49,8 @@ export function generateAccessToken(
   try {
     const jti = uuidv4();
     const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + (15 * 60); // 15분
+    const expirySeconds = parseDuration(config.jwt.expiresIn);
+    const exp = iat + expirySeconds;
 
     const payload: JwtPayload = {
       user_id,
@@ -57,7 +80,6 @@ export function generateAccessToken(
 
 /**
  * Refresh Token 생성 (TASK-1-13)
- * 유효 기간: 7일
  */
 export function generateRefreshToken(
   user_id: number,
@@ -70,7 +92,8 @@ export function generateRefreshToken(
   try {
     const jti = uuidv4();
     const iat = Math.floor(Date.now() / 1000);
-    const exp = iat + (7 * 24 * 60 * 60); // 7일
+    const expirySeconds = parseDuration(config.jwt.refreshExpiresIn);
+    const exp = iat + expirySeconds;
 
     const payload: JwtPayload = {
       user_id,
@@ -85,7 +108,10 @@ export function generateRefreshToken(
       token_type: 'refresh'
     };
 
-    const token = jwt.sign(payload, config.jwt.secret, {
+    // Refresh Token은 별도의 시크릿 사용 권장
+    const secret = config.jwt.refreshSecret || config.jwt.secret;
+
+    const token = jwt.sign(payload, secret, {
       algorithm: 'HS256'
     });
 
@@ -109,14 +135,15 @@ export function generateToken(user_id: number, email: string, nickname: string):
 /**
  * JWT 토큰 검증
  */
-export function verifyToken(token: string): JwtPayload {
+export function verifyToken(token: string, isRefresh: boolean = false): JwtPayload {
   const methodName = 'verifyToken';
 
   try {
     // 'Bearer ' 접두사 제거
     const cleanToken = token.startsWith('Bearer ') ? token.slice(7) : token;
+    const secret = isRefresh ? (config.jwt.refreshSecret || config.jwt.secret) : config.jwt.secret;
 
-    const decoded = jwt.verify(cleanToken, config.jwt.secret, {
+    const decoded = jwt.verify(cleanToken, secret, {
       algorithms: ['HS256']
     }) as JwtPayload;
 

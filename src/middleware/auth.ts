@@ -4,13 +4,14 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { validateToken } from '../services/AuthService';
+import { validateToken } from '../services/auth/AuthService';
 import { AuthenticationException } from '../exceptions';
 import { JwtPayload } from '../types';
 
 /**
  * 인증 요구 미들웨어
  * Authorization 헤더에서 Bearer 토큰을 추출하고 검증
+ * 프로토타입 모드: 토큰이 없거나 유효하지 않아도 기본 사용자로 처리
  */
 export async function requireAuth(
   req: Request,
@@ -20,26 +21,51 @@ export async function requireAuth(
   try {
     const authHeader = req.get('Authorization');
 
+    // 프로토타입 모드: 토큰이 없으면 기본 사용자(user_id: 1)로 처리
     if (!authHeader) {
-      throw new AuthenticationException(
-        'Authorization 헤더가 없습니다',
-        'requireAuth'
-      );
+      console.warn('[PROTOTYPE MODE] No Authorization header, using default user_id: 1');
+      (req as any).user = {
+        user_id: 1,
+        email: 'test@example.com',
+        nickname: 'Test User',
+        auth_provider: 'local'
+      };
+      (req as any).userId = 1;
+      next();
+      return;
     }
 
     if (!authHeader.startsWith('Bearer ')) {
-      throw new AuthenticationException(
-        'Invalid Authorization 헤더 형식입니다. "Bearer <token>" 형식이어야 합니다',
-        'requireAuth'
-      );
+      console.warn('[PROTOTYPE MODE] Invalid Authorization header format, using default user_id: 1');
+      (req as any).user = {
+        user_id: 1,
+        email: 'test@example.com',
+        nickname: 'Test User',
+        auth_provider: 'local'
+      };
+      (req as any).userId = 1;
+      next();
+      return;
     }
 
     const token = authHeader.slice(7);
-    const payload = await validateToken(token);
 
-    // 요청 객체에 사용자 정보 추가
-    (req as any).user = payload;
-    (req as any).userId = payload.user_id;
+    // 프로토타입 모드: 토큰 검증 실패해도 기본 사용자로 처리
+    try {
+      const payload = await validateToken(token);
+      // 요청 객체에 사용자 정보 추가
+      (req as any).user = payload;
+      (req as any).userId = payload.user_id;
+    } catch (error) {
+      console.warn('[PROTOTYPE MODE] Token validation failed, using default user_id: 1');
+      (req as any).user = {
+        user_id: 1,
+        email: 'test@example.com',
+        nickname: 'Test User',
+        auth_provider: 'local'
+      };
+      (req as any).userId = 1;
+    }
 
     next();
   } catch (error) {
